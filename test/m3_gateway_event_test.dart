@@ -189,40 +189,38 @@ void main() {
       expect(event.member.user.username, 'oppa');
     });
 
-    test(
-      'GUILD_MEMBER_REMOVE decodes just guild_id+user (no role/nick data)',
-      () {
-        final event =
-            GatewayEvent.fromDispatch('GUILD_MEMBER_REMOVE', {
-                  'guild_id': '1',
-                  'user': _sampleUserJson(),
-                })
-                as GuildMemberRemoveEvent;
-        expect(event.user.username, 'oppa');
-      },
-    );
+    test('GUILD_MEMBER_REMOVE decodes just guild_id+user.id — confirmed live '
+        'that user carries no other fields, despite what GuildMemberRemove.ts '
+        'implies', () {
+      final event =
+          GatewayEvent.fromDispatch('GUILD_MEMBER_REMOVE', {
+                'guild_id': '1',
+                'user': {'id': '2'},
+              })
+              as GuildMemberRemoveEvent;
+      expect(event.userId, Snowflake.parse('2'));
+    });
 
-    test(
-      'GUILD_BAN_ADD decodes guild_id+user only, not the full GuildBan REST shape',
-      () {
-        final event =
-            GatewayEvent.fromDispatch('GUILD_BAN_ADD', {
-                  'guild_id': '1',
-                  'user': _sampleUserJson(),
-                })
-                as GuildBanAddEvent;
-        expect(event.user.username, 'oppa');
-      },
-    );
+    test('GUILD_BAN_ADD decodes guild_id+user.id only, not the full GuildBan '
+        'REST shape nor a full User', () {
+      final event =
+          GatewayEvent.fromDispatch('GUILD_BAN_ADD', {
+                'guild_id': '1',
+                'user': {'id': '2'},
+              })
+              as GuildBanAddEvent;
+      expect(event.userId, Snowflake.parse('2'));
+    });
 
-    test('GUILD_BAN_REMOVE decodes guild_id+user', () {
+    test('GUILD_BAN_REMOVE decodes guild_id+user.id', () {
       final event =
           GatewayEvent.fromDispatch('GUILD_BAN_REMOVE', {
                 'guild_id': '1',
-                'user': _sampleUserJson(),
+                'user': {'id': '2'},
               })
               as GuildBanRemoveEvent;
       expect(event.guildId, Snowflake.parse('1'));
+      expect(event.userId, Snowflake.parse('2'));
     });
   });
 

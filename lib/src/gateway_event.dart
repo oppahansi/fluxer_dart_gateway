@@ -12,15 +12,18 @@ import 'package:fluxer_dart_core/fluxer_dart_core.dart';
 /// [UnknownDispatchEvent] rather than being dropped, so a bot author can
 /// still react to them by name before a typed variant exists.
 ///
-/// Verified against the reference client's TS handlers
-/// (`fluxer_app/src/features/**/events/*.ts`): several "update" and
-/// "delete" events carry a genuinely **partial** payload, not a full
-/// resource — the reference client itself only gets away with treating
-/// them as full types via unchecked TS `as` casts. Rather than risk a
-/// runtime crash decoding a field that's actually absent, those events
-/// (`ChannelUpdateEvent`, `MessageUpdateEvent`) carry just the
-/// guaranteed-present identifying fields plus the raw payload, instead of
-/// reusing e.g. `Channel.fromJson`/`Message.fromJson`.
+/// Several "update"/"remove" events carry a genuinely **partial**
+/// payload, not a full resource. Some of that was caught cross-checking
+/// the reference client's TS handlers (`fluxer_app/src/features/**/
+/// events/*.ts`) against their own unchecked `as` casts
+/// (`ChannelUpdateEvent`, `MessageUpdateEvent`); `GuildMemberRemoveEvent`/
+/// `GuildBanAddEvent`/`GuildBanRemoveEvent` looked fully-typed by the
+/// same TS check but turned out to only carry `{id}` for their `user`
+/// field on the real wire — caught by a live cast-error crash, not by
+/// reading source, so carry just [Snowflake] ids now instead of a
+/// decoded [User]. The lesson generalizes: a TS type on the reference
+/// client is what it *claims* to send, not proof of what it actually
+/// does.
 sealed class GatewayEvent {
   const GatewayEvent();
 
@@ -360,59 +363,68 @@ final class GuildMemberUpdateEvent extends GatewayEvent {
       'GuildMemberUpdateEvent($guildId, ${member.displayName})';
 }
 
-/// Verified against `GuildMemberRemove.ts`: unlike add/update, this
-/// payload is just `{guild_id, user}` — no role/nick/join-date data,
-/// since the member no longer has any.
+/// The `user` sub-object here carries only `{id}` — confirmed live
+/// against a real instance, not just assumed from `GuildMemberRemove.ts`
+/// (whose TS type claims a fuller `User` shape that doesn't actually
+/// show up on the wire, the same gap M3's live regression check was
+/// meant to catch and evidently didn't for this one). Carries [userId]
+/// rather than a decoded [User] so a genuinely-missing `username` can't
+/// throw a cast error.
 final class GuildMemberRemoveEvent extends GatewayEvent {
-  const GuildMemberRemoveEvent({required this.guildId, required this.user});
+  const GuildMemberRemoveEvent({required this.guildId, required this.userId});
 
   factory GuildMemberRemoveEvent.fromJson(Map<String, dynamic> json) =>
       GuildMemberRemoveEvent(
         guildId: Snowflake.parse(json['guild_id'] as String),
-        user: User.fromJson(json['user'] as Map<String, dynamic>),
+        userId: Snowflake.parse(
+          (json['user'] as Map<String, dynamic>)['id'] as String,
+        ),
       );
 
   final Snowflake guildId;
-  final User user;
+  final Snowflake userId;
 
   @override
-  String toString() => 'GuildMemberRemoveEvent($guildId, ${user.username})';
+  String toString() => 'GuildMemberRemoveEvent($guildId, $userId)';
 }
 
-/// Verified against `GuildBan.ts`: `{guild_id, user}` only — notably
-/// *not* the fuller `GuildBanResponse` shape REST returns (no
-/// `reason`/`moderator_id`/`banned_at`), so this doesn't reuse
-/// `GuildBan.fromJson`.
+/// Same correction as [GuildMemberRemoveEvent]: the `user` sub-object is
+/// `{id}` only on the wire, confirmed live, despite `GuildBan.ts`'s
+/// fuller-looking TS type.
 final class GuildBanAddEvent extends GatewayEvent {
-  const GuildBanAddEvent({required this.guildId, required this.user});
+  const GuildBanAddEvent({required this.guildId, required this.userId});
 
   factory GuildBanAddEvent.fromJson(Map<String, dynamic> json) =>
       GuildBanAddEvent(
         guildId: Snowflake.parse(json['guild_id'] as String),
-        user: User.fromJson(json['user'] as Map<String, dynamic>),
+        userId: Snowflake.parse(
+          (json['user'] as Map<String, dynamic>)['id'] as String,
+        ),
       );
 
   final Snowflake guildId;
-  final User user;
+  final Snowflake userId;
 
   @override
-  String toString() => 'GuildBanAddEvent($guildId, ${user.username})';
+  String toString() => 'GuildBanAddEvent($guildId, $userId)';
 }
 
 final class GuildBanRemoveEvent extends GatewayEvent {
-  const GuildBanRemoveEvent({required this.guildId, required this.user});
+  const GuildBanRemoveEvent({required this.guildId, required this.userId});
 
   factory GuildBanRemoveEvent.fromJson(Map<String, dynamic> json) =>
       GuildBanRemoveEvent(
         guildId: Snowflake.parse(json['guild_id'] as String),
-        user: User.fromJson(json['user'] as Map<String, dynamic>),
+        userId: Snowflake.parse(
+          (json['user'] as Map<String, dynamic>)['id'] as String,
+        ),
       );
 
   final Snowflake guildId;
-  final User user;
+  final Snowflake userId;
 
   @override
-  String toString() => 'GuildBanRemoveEvent($guildId, ${user.username})';
+  String toString() => 'GuildBanRemoveEvent($guildId, $userId)';
 }
 
 // --- Channel events -------------------------------------------------------

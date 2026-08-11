@@ -184,7 +184,25 @@ class GatewayConnection {
         _reconnectAttempt = 0;
         _setState(Connected(sessionId: _sessionId!));
       case MessageCreateEvent():
+      case MessageUpdateEvent():
+      case MessageDeleteEvent():
+      case MessageReactionAddEvent():
+      case MessageReactionRemoveEvent():
+      case TypingStartEvent():
       case GuildCreateEvent():
+      case GuildUpdateEvent():
+      case GuildDeleteEvent():
+      case GuildRoleCreateEvent():
+      case GuildRoleUpdateEvent():
+      case GuildRoleDeleteEvent():
+      case GuildMemberAddEvent():
+      case GuildMemberUpdateEvent():
+      case GuildMemberRemoveEvent():
+      case GuildBanAddEvent():
+      case GuildBanRemoveEvent():
+      case ChannelCreateEvent():
+      case ChannelUpdateEvent():
+      case ChannelDeleteEvent():
       case UnknownDispatchEvent():
         break;
     }

@@ -174,14 +174,22 @@ class GatewayConnection {
   }
 
   void _handleDispatch(String eventName, Map<String, dynamic> data) {
+    // DEBUG, not INFO: this fires once per message/reaction/typing tick on
+    // an active bot — matches discord.js's `debug` event / discord.py's
+    // gateway logger at DEBUG, both reserving INFO for session lifecycle.
+    logger.debug('Dispatch: $eventName');
     final event = GatewayEvent.fromDispatch(eventName, data);
     switch (event) {
       case ReadyEvent():
         _sessionId = event.sessionId;
         _reconnectAttempt = 0;
+        logger.info(
+          'READY — logged in as ${event.user.username} (session ${event.sessionId})',
+        );
         _setState(Connected(sessionId: event.sessionId));
       case ResumedEvent():
         _reconnectAttempt = 0;
+        logger.info('RESUMED session $_sessionId');
         _setState(Connected(sessionId: _sessionId!));
       case MessageCreateEvent():
       case MessageUpdateEvent():
@@ -262,27 +270,36 @@ class GatewayConnection {
     _transport = null;
 
     if (closeCode?.isRecoverable == false) {
+      logger.error(
+        'Gateway closed with an unrecoverable code: ${closeCode?.name}${reason != null ? ' ($reason)' : ''}',
+      );
       _setState(Closed(closeCode: closeCode, reason: reason));
       return;
     }
 
     _reconnectAttempt++;
     if (!reconnectPolicy.shouldRetry(_reconnectAttempt)) {
+      logger.error(
+        'Gateway closed after $_reconnectAttempt reconnect attempts, giving up',
+      );
       _setState(Closed(closeCode: closeCode, reason: reason));
       return;
     }
 
-    _setState(Reconnecting(attempt: _reconnectAttempt));
-    _reconnectTimer = _createTimer(
-      reconnectPolicy.delayFor(_reconnectAttempt),
-      () {
-        unawaited(connect());
-      },
+    final delay = reconnectPolicy.delayFor(_reconnectAttempt);
+    logger.warning(
+      'Gateway connection lost (${closeCode?.name ?? 'no close code'}), '
+      'reconnect attempt $_reconnectAttempt in ${delay.inMilliseconds}ms',
     );
+    _setState(Reconnecting(attempt: _reconnectAttempt));
+    _reconnectTimer = _createTimer(delay, () {
+      unawaited(connect());
+    });
   }
 
   void _setState(GatewayConnectionState newState) {
     _state = newState;
+    logger.info('Gateway: $newState');
     _stateController.add(newState);
   }
 }

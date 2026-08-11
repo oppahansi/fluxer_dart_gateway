@@ -1,13 +1,13 @@
-# fluxer_gateway
+# fluxer_dart_gateway
 
-WebSocket gateway client for the [fluxer.dart](https://github.com/oppahansi/fluxer.dart) ecosystem.
+WebSocket gateway client for the [fluxer_dart](https://github.com/oppahansi/fluxer_dart) ecosystem.
 
 Everything here was verified against Fluxer's own source
 (`fluxerapp/fluxer` on GitHub), since Fluxer's public gateway docs are
 still unwritten placeholders: the reference client's TS event handlers
 (`fluxer_app/src/features/**/events/*.ts`) for dispatch payload shapes,
 and the gateway server's own Erlang source
-(`fluxer_gateway/src/gateway/gateway_sharding.erl`,
+(`fluxer_dart_gateway/src/gateway/gateway_sharding.erl`,
 `gateway_handler_identify.erl`) for the IDENTIFY/sharding wire format.
 
 ## Design
@@ -42,16 +42,17 @@ also exhaustively `switch`-able.
   `session_start_limit.max_concurrency` buckets so shards don't all
   identify at once.
 
-## Part of the fluxer.dart ecosystem
+## Part of the fluxer_dart ecosystem
 
 | Package | Purpose |
 |---|---|
-| [`fluxer_utils`](https://github.com/oppahansi/fluxer_utils) | generic building blocks |
-| [`fluxer_core`](https://github.com/oppahansi/fluxer_core) | domain models |
-| [`fluxer_rest`](https://github.com/oppahansi/fluxer_rest) | REST client |
-| [`fluxer_gateway`](https://github.com/oppahansi/fluxer_gateway) | *(this package)* WebSocket gateway client |
-| [`fluxer.dart`](https://github.com/oppahansi/fluxer.dart) | main framework — the `Bot` facade |
-| [`fluxer.dart-bot`](https://github.com/oppahansi/fluxer.dart-bot) | example bot |
+| [`fluxer_dart_utils`](https://github.com/oppahansi/fluxer_dart_utils) | generic building blocks |
+| [`fluxer_dart_core`](https://github.com/oppahansi/fluxer_dart_core) | domain models |
+| [`fluxer_dart_rest`](https://github.com/oppahansi/fluxer_dart_rest) | REST client |
+| [`fluxer_dart_gateway`](https://github.com/oppahansi/fluxer_dart_gateway) | *(this package)* WebSocket gateway client |
+| [`fluxer_dart_voice`](https://github.com/oppahansi/fluxer_dart_voice) | voice support |
+| [`fluxer_dart`](https://github.com/oppahansi/fluxer_dart) | main framework — the `Bot` facade |
+| [`fluxer_dart_bot`](https://github.com/oppahansi/fluxer_dart_bot) | example bot |
 
 ## Installation
 
@@ -60,9 +61,9 @@ git dependency:
 
 ```yaml
 dependencies:
-  fluxer_gateway:
+  fluxer_dart_gateway:
     git:
-      url: https://github.com/oppahansi/fluxer_gateway.git
+      url: https://github.com/oppahansi/fluxer_dart_gateway.git
 ```
 
 ## License

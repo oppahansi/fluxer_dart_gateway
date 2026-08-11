@@ -3,7 +3,7 @@
 /// lets tests drive the connection state machine with a fake, in-memory
 /// transport instead of a real socket.
 ///
-/// [GatewayConnection]: package:fluxer_gateway/src/gateway_connection.dart
+/// [GatewayConnection]: package:fluxer_dart_gateway/src/gateway_connection.dart
 abstract interface class GatewayTransport {
   /// Text frames received from the server, in order. The stream is done
   /// once the connection closes, at which point [closeCode]/[closeReason]

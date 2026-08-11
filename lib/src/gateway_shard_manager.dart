@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:fluxer_utils/fluxer_utils.dart';
+import 'package:fluxer_dart_utils/fluxer_dart_utils.dart';
 
 import 'connection_state.dart';
 import 'gateway_connection.dart';

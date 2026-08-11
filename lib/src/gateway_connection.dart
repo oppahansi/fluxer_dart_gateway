@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:fluxer_utils/fluxer_utils.dart';
+import 'package:fluxer_dart_utils/fluxer_dart_utils.dart';
 
 import 'connection_state.dart';
 import 'gateway_event.dart';
@@ -19,7 +19,7 @@ import 'web_socket_gateway_transport.dart';
 /// `test/gateway_connection_test.dart` for a fake transport driving it
 /// through the happy path, RESUME, and reconnect scenarios.
 ///
-/// [GatewayTransport]: package:fluxer_gateway/src/gateway_transport.dart
+/// [GatewayTransport]: package:fluxer_dart_gateway/src/gateway_transport.dart
 class GatewayConnection {
   GatewayConnection({
     required this.gatewayUrl,
@@ -40,8 +40,8 @@ class GatewayConnection {
            properties ??
            const {
              'os': 'dart',
-             'browser': 'fluxer.dart',
-             'device': 'fluxer.dart',
+             'browser': 'fluxer_dart',
+             'device': 'fluxer_dart',
            },
        logger = logger ?? const NoopLogger(),
        reconnectPolicy = reconnectPolicy ?? ExponentialBackoffRetryPolicy();

@@ -1,14 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:fluxer_gateway/fluxer_gateway.dart';
+import 'package:fluxer_dart_gateway/fluxer_dart_gateway.dart';
 
 /// An in-memory [GatewayTransport] double: tests push server frames via
 /// [emit] and inspect what the connection sent via [sentMessages], with no
 /// real socket involved. Preferred here over a mocktail `Mock` because the
 /// gateway boundary is fundamentally a stateful bidirectional stream
 /// protocol, not a handful of call/verify request-response methods —
-/// mocktail shines at the latter (see fluxer_rest's tests), a hand-rolled
+/// mocktail shines at the latter (see fluxer_dart_rest's tests), a hand-rolled
 /// fake fits the former better.
 final class FakeGatewayTransport implements GatewayTransport {
   final _incoming = StreamController<String>.broadcast();

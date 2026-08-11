@@ -1,4 +1,4 @@
-/// WebSocket gateway client for the fluxer.dart ecosystem: an explicit
+/// WebSocket gateway client for the fluxer_dart ecosystem: an explicit
 /// connection state machine, heartbeat management, and typed dispatch
 /// events.
 library;

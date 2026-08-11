@@ -1,4 +1,4 @@
-import 'package:fluxer_core/fluxer_core.dart';
+import 'package:fluxer_dart_core/fluxer_dart_core.dart';
 
 /// A decoded DISPATCH (opcode 0) payload.
 ///
@@ -482,7 +482,7 @@ final class ChannelDeleteEvent extends GatewayEvent {
 }
 
 /// A DISPATCH event whose name isn't modeled by this version of
-/// `fluxer_gateway`. Carries the raw event name and payload so callers can
+/// `fluxer_dart_gateway`. Carries the raw event name and payload so callers can
 /// still branch on [eventName] without a typed variant.
 final class UnknownDispatchEvent extends GatewayEvent {
   const UnknownDispatchEvent(this.eventName, this.data);

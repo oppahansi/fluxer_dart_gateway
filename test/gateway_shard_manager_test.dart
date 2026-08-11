@@ -1,5 +1,5 @@
 import 'package:fake_async/fake_async.dart';
-import 'package:fluxer_gateway/fluxer_gateway.dart';
+import 'package:fluxer_dart_gateway/fluxer_dart_gateway.dart';
 import 'package:test/test.dart';
 
 import 'fakes/fake_gateway_transport.dart';

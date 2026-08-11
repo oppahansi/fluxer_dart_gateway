@@ -1,0 +1,23 @@
+name: fluxer_gateway
+description: >-
+  WebSocket gateway client for Fluxer: an explicit connection state machine,
+  heartbeat management, and typed dispatch events, in place of Fluxer's own
+  reference client's ad hoc boolean/nullable-field connection tracking.
+version: 0.1.0
+homepage: https://github.com/oppahansi/fluxer_gateway
+repository: https://github.com/oppahansi/fluxer_gateway
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  fluxer_core:
+    path: ../fluxer_core
+  fluxer_utils:
+    path: ../fluxer_utils
+  web_socket_channel: ^3.0.3
+
+dev_dependencies:
+  lints: ^6.1.0
+  mocktail: ^1.0.5
+  test: ^1.31.2

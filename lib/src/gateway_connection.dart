@@ -35,7 +35,6 @@ class GatewayConnection {
     Map<String, dynamic>? properties,
     Logger? logger,
     RetryPolicy? reconnectPolicy,
-    Timer Function(Duration, void Function())? createTimer,
   }) : _transportFactory =
            transportFactory ?? WebSocketGatewayTransport.connect,
        properties =
@@ -46,8 +45,7 @@ class GatewayConnection {
              'device': 'fluxer.dart',
            },
        logger = logger ?? const NoopLogger(),
-       reconnectPolicy = reconnectPolicy ?? ExponentialBackoffRetryPolicy(),
-       _createTimer = createTimer ?? Timer.new;
+       reconnectPolicy = reconnectPolicy ?? ExponentialBackoffRetryPolicy();
 
   final Uri gatewayUrl;
   final String token;
@@ -56,7 +54,6 @@ class GatewayConnection {
   final RetryPolicy reconnectPolicy;
 
   final GatewayTransport Function(Uri) _transportFactory;
-  final Timer Function(Duration, void Function()) _createTimer;
 
   final _stateController = StreamController<GatewayConnectionState>.broadcast();
   final _eventController = StreamController<GatewayEvent>.broadcast();
@@ -252,7 +249,6 @@ class GatewayConnection {
       interval: interval,
       onHeartbeat: _sendHeartbeat,
       onTimeout: _handleHeartbeatTimeout,
-      createTimer: _createTimer,
     )..start();
   }
 
@@ -292,7 +288,7 @@ class GatewayConnection {
       'reconnect attempt $_reconnectAttempt in ${delay.inMilliseconds}ms',
     );
     _setState(Reconnecting(attempt: _reconnectAttempt));
-    _reconnectTimer = _createTimer(delay, () {
+    _reconnectTimer = Timer(delay, () {
       unawaited(connect());
     });
   }

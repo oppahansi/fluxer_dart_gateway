@@ -15,9 +15,7 @@ final class HeartbeatManager {
     required this.onHeartbeat,
     required this.onTimeout,
     Random? random,
-    Timer Function(Duration, void Function())? createTimer,
-  }) : _random = random ?? Random(),
-       _createTimer = createTimer ?? Timer.new;
+  }) : _random = random ?? Random();
 
   /// The `heartbeat_interval` from HELLO.
   final Duration interval;
@@ -31,7 +29,6 @@ final class HeartbeatManager {
   final void Function() onTimeout;
 
   final Random _random;
-  final Timer Function(Duration, void Function()) _createTimer;
 
   Timer? _timer;
   bool _awaitingAck = false;
@@ -65,7 +62,7 @@ final class HeartbeatManager {
   }
 
   void _scheduleNext() {
-    _timer = _createTimer(computeNextDelay(), _tick);
+    _timer = Timer(computeNextDelay(), _tick);
   }
 
   void _tick() {

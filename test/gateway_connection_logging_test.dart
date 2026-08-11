@@ -3,7 +3,6 @@ import 'package:fluxer_utils/fluxer_utils.dart';
 import 'package:test/test.dart';
 
 import 'fakes/fake_gateway_transport.dart';
-import 'fakes/fake_timer_scheduler.dart';
 
 final class _RecordingLogger extends Logger {
   final entries = <(LogLevel, String)>[];
@@ -48,13 +47,11 @@ Map<String, dynamic> _readyPayload({String sessionId = 'session-1'}) => {
 
 void main() {
   group('GatewayConnection logging', () {
-    late FakeTimerScheduler scheduler;
     late _RecordingLogger logger;
     late List<FakeGatewayTransport> transports;
     late GatewayConnection connection;
 
     setUp(() {
-      scheduler = FakeTimerScheduler();
       logger = _RecordingLogger();
       transports = [];
       connection = GatewayConnection(
@@ -66,7 +63,6 @@ void main() {
           transports.add(transport);
           return transport;
         },
-        createTimer: scheduler.schedule,
       );
     });
 
@@ -147,7 +143,6 @@ void main() {
             transports.add(transport);
             return transport;
           },
-          createTimer: scheduler.schedule,
           reconnectPolicy: ExponentialBackoffRetryPolicy(jitterFraction: 0),
         );
         await connection.connect();

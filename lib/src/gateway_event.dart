@@ -23,7 +23,7 @@ sealed class GatewayEvent {
       'READY' => ReadyEvent.fromJson(data),
       'RESUMED' => const ResumedEvent(),
       'MESSAGE_CREATE' => MessageCreateEvent(Message.fromJson(data)),
-      'GUILD_CREATE' => GuildCreateEvent(Guild.fromJson(data)),
+      'GUILD_CREATE' => GuildCreateEvent(Guild.fromGuildCreateJson(data)),
       _ => UnknownDispatchEvent(eventName, data),
     };
   }

@@ -1,3 +1,4 @@
+import 'package:fluxer_core/fluxer_core.dart';
 import 'package:fluxer_gateway/fluxer_gateway.dart';
 import 'package:test/test.dart';
 
@@ -61,17 +62,22 @@ void main() {
       expect((event as MessageCreateEvent).message.content, 'hi');
     });
 
-    test('decodes GUILD_CREATE', () {
+    test('decodes GUILD_CREATE from its nested-properties gateway shape', () {
       final event = GatewayEvent.fromDispatch('GUILD_CREATE', {
         'id': '1',
-        'name': 'Test',
-        'icon': null,
-        'owner_id': '2',
+        'properties': {
+          'id': '1',
+          'name': 'Test',
+          'icon': null,
+          'owner_id': '2',
+        },
+        'roles': <dynamic>[],
         'member_count': 1,
       });
 
       expect(event, isA<GuildCreateEvent>());
       expect((event as GuildCreateEvent).guild.name, 'Test');
+      expect(event.guild.ownerId, Snowflake.parse('2'));
     });
 
     test('falls back to UnknownDispatchEvent for unmodeled event names', () {

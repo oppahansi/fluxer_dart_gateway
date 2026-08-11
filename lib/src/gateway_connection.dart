@@ -75,10 +75,28 @@ class GatewayConnection {
   Stream<GatewayConnectionState> get stateChanges => _stateController.stream;
   Stream<GatewayEvent> get events => _eventController.stream;
 
+  /// [gatewayUrl] with the query params the server actually requires
+  /// appended. Verified against `gateway_handler.erl`'s `parse_version`
+  /// (rejects anything but the literal string `"1"` with close code
+  /// `invalidApiVersion`) and `GatewaySocket.ts`'s `buildGatewayUrl`
+  /// (`v`, `encoding`, `compress`). `encoding` is included for
+  /// forward-compatible explicitness even though the server currently
+  /// hardcodes JSON regardless of its value; `compress` is deliberately
+  /// omitted — this client doesn't implement zstd decompression, and an
+  /// absent/unrecognized value already defaults to no compression
+  /// server-side (`gateway_compress:parse_compression/2`).
+  Uri get _connectUrl => gatewayUrl.replace(
+    queryParameters: {
+      ...gatewayUrl.queryParameters,
+      'v': '1',
+      'encoding': 'json',
+    },
+  );
+
   Future<void> connect() async {
     _reconnectTimer?.cancel();
     _setState(const Connecting());
-    final transport = _transportFactory(gatewayUrl);
+    final transport = _transportFactory(_connectUrl);
     _transport = transport;
     _messageSubscription = transport.messages.listen(
       _handleRawMessage,

@@ -24,11 +24,17 @@ class GatewayConnection {
   GatewayConnection({
     required this.gatewayUrl,
     required this.token,
+    this.shardId,
+    this.shardCount,
     GatewayTransport Function(Uri)? transportFactory,
     Map<String, dynamic>? properties,
     Logger? logger,
     RetryPolicy? reconnectPolicy,
-  }) : _transportFactory =
+  }) : assert(
+         (shardId == null) == (shardCount == null),
+         'shardId and shardCount must be given together',
+       ),
+       _transportFactory =
            transportFactory ?? WebSocketGatewayTransport.connect,
        properties =
            properties ??
@@ -45,6 +51,13 @@ class GatewayConnection {
   final Map<String, dynamic> properties;
   final Logger logger;
   final RetryPolicy reconnectPolicy;
+
+  /// This shard's index and the total shard count sent as IDENTIFY's
+  /// `shard: [shardId, shardCount]`. Both `null` identifies as a single,
+  /// unsharded connection — the server's own default when `shard` is
+  /// omitted from IDENTIFY entirely.
+  final int? shardId;
+  final int? shardCount;
 
   final GatewayTransport Function(Uri) _transportFactory;
 
@@ -211,7 +224,12 @@ class GatewayConnection {
     _setState(const Identifying());
     _send({
       'op': GatewayOpcode.identify.value,
-      'd': {'token': token, 'properties': properties, 'flags': 0},
+      'd': {
+        'token': token,
+        'properties': properties,
+        'flags': 0,
+        if (shardId != null) 'shard': [shardId, shardCount],
+      },
     });
   }
 

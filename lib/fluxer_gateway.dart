@@ -6,6 +6,7 @@ library;
 export 'src/connection_state.dart';
 export 'src/gateway_connection.dart';
 export 'src/gateway_event.dart';
+export 'src/gateway_shard_manager.dart';
 export 'src/gateway_transport.dart';
 export 'src/heartbeat_manager.dart';
 export 'src/opcodes.dart';

@@ -62,10 +62,16 @@ void main() {
       await connection.dispose();
     });
 
-    GatewayConnection makeConnection({RetryPolicy? reconnectPolicy}) {
+    GatewayConnection makeConnection({
+      RetryPolicy? reconnectPolicy,
+      int? shardId,
+      int? shardCount,
+    }) {
       return GatewayConnection(
         gatewayUrl: Uri.parse('wss://example.invalid/gateway'),
         token: 'test-token',
+        shardId: shardId,
+        shardCount: shardCount,
         transportFactory: (_) {
           final transport = FakeGatewayTransport();
           transports.add(transport);
@@ -101,6 +107,33 @@ void main() {
         expect(connection.state, isA<Connected>());
         expect((connection.state as Connected).sessionId, 'session-1');
         expect(events.whereType<ReadyEvent>(), hasLength(1));
+      });
+    });
+
+    test('IDENTIFY carries shard: [shardId, shardCount] when sharded', () {
+      fakeAsync((async) {
+        connection = makeConnection(shardId: 2, shardCount: 4);
+        connection.connect();
+        final transport = transports.single;
+        transport.emit(_helloPayload);
+        _pump(async);
+
+        expect(transport.sentMessages.single['d']['shard'], [2, 4]);
+      });
+    });
+
+    test('IDENTIFY omits shard entirely for an unsharded connection', () {
+      fakeAsync((async) {
+        connection = makeConnection();
+        connection.connect();
+        final transport = transports.single;
+        transport.emit(_helloPayload);
+        _pump(async);
+
+        expect(
+          transport.sentMessages.single['d'].containsKey('shard'),
+          isFalse,
+        );
       });
     });
 
@@ -237,6 +270,84 @@ void main() {
         expect(connection.state, isA<Connected>());
       });
     });
+
+    test(
+      'reconnects and RESUMEs after an abrupt network drop (no close code)',
+      () {
+        fakeAsync((async) {
+          connection = makeConnection(
+            reconnectPolicy: ExponentialBackoffRetryPolicy(jitterFraction: 0),
+          );
+          connection.connect();
+          final firstTransport = transports.single;
+          firstTransport.emit(_helloPayload);
+          _pump(async);
+          firstTransport.emit(_readyPayload(sessionId: 'session-77'));
+          _pump(async);
+
+          firstTransport.simulateNetworkDrop();
+          _pump(async);
+          expect(connection.state, isA<Reconnecting>());
+
+          async.elapse(const Duration(milliseconds: 500));
+          final secondTransport = transports[1];
+          secondTransport.emit(_helloPayload);
+          _pump(async);
+
+          expect(connection.state, isA<Resuming>());
+          expect(
+            secondTransport.sentMessages.single['d']['session_id'],
+            'session-77',
+          );
+        });
+      },
+    );
+
+    test('INVALID_SESSION with resumable: true falls back to RESUME', () {
+      fakeAsync((async) {
+        connection = makeConnection();
+        connection.connect();
+        final transport = transports.single;
+        transport.emit(_helloPayload);
+        _pump(async);
+        transport.emit(_readyPayload(sessionId: 'session-9'));
+        _pump(async);
+
+        transport.emit({'op': GatewayOpcode.invalidSession.value, 'd': true});
+        _pump(async);
+
+        expect(connection.state, isA<Resuming>());
+        expect(transport.sentMessages.last['op'], GatewayOpcode.resume.value);
+        expect(transport.sentMessages.last['d']['session_id'], 'session-9');
+      });
+    });
+
+    test(
+      'INVALID_SESSION with resumable: false clears the session and re-IDENTIFYs',
+      () {
+        fakeAsync((async) {
+          connection = makeConnection();
+          connection.connect();
+          final transport = transports.single;
+          transport.emit(_helloPayload);
+          _pump(async);
+          transport.emit(_readyPayload(sessionId: 'session-9'));
+          _pump(async);
+
+          transport.emit({
+            'op': GatewayOpcode.invalidSession.value,
+            'd': false,
+          });
+          _pump(async);
+
+          expect(connection.state, isA<Identifying>());
+          expect(
+            transport.sentMessages.last['op'],
+            GatewayOpcode.identify.value,
+          );
+        });
+      },
+    );
 
     test('does not reconnect after an unrecoverable close code', () {
       fakeAsync((async) {

@@ -50,4 +50,11 @@ final class FakeGatewayTransport implements GatewayTransport {
     closeReason = reason;
     await _incoming.close();
   }
+
+  /// Simulates an abrupt network failure: the socket just stops delivering
+  /// frames, with no close frame and so no close code at all — unlike
+  /// [simulateServerClose], which always has one.
+  Future<void> simulateNetworkDrop() async {
+    await _incoming.close();
+  }
 }

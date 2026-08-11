@@ -8,10 +8,10 @@ import 'fakes/fake_gateway_transport.dart';
 /// A single `elapse(Duration.zero)` drains one round of microtasks/timers,
 /// but a broadcast [StreamController]'s `cancel()`/`close()` pair (as used
 /// by [GatewayConnection.disconnect]) can take more than one round to
-/// fully settle — verified empirically: `cancel()`'s future doesn't
-/// resolve until *after* the paired `close()` has, which itself needs its
-/// own round. A few empty rounds is cheap insurance against that kind of
-/// multi-hop resolution chain, here and anywhere else it might come up.
+/// fully settle: `cancel()`'s future doesn't resolve until *after* the
+/// paired `close()` has, which itself needs its own round. A few empty
+/// rounds is cheap insurance against that kind of multi-hop resolution
+/// chain, here and anywhere else it might come up.
 void _pump(FakeAsync async, [int rounds = 3]) {
   for (var i = 0; i < rounds; i++) {
     async.elapse(Duration.zero);

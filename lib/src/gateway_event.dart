@@ -3,19 +3,18 @@ import 'package:fluxer_core/fluxer_core.dart';
 /// A decoded DISPATCH (opcode 0) payload.
 ///
 /// Sealed so consumers get exhaustive-`switch` safety instead of Fluxer's
-/// own client's untyped `Map<string, handler>` event registry. M1 typed
-/// the four events the "hello gateway" vertical slice needed; M3 added
-/// the ~18 more that cover typical moderation/utility bot needs (message
-/// edits/deletes/reactions, channel and role CRUD, member join/leave,
-/// bans, typing). The remaining ~30 (presence, voice states, calls,
-/// invites, webhooks update, the Fluxer-only meme/saved-message events,
-/// ...) still decode to [UnknownDispatchEvent] rather than being dropped,
-/// so a bot author can still react to them by name before a typed
-/// variant exists.
+/// own client's untyped `Map<string, handler>` event registry. Covers
+/// session lifecycle (READY, RESUMED) and the ~18 events that cover
+/// typical moderation/utility bot needs (message edits/deletes/reactions,
+/// channel and role CRUD, member join/leave, bans, typing). The remaining
+/// events (presence, voice states, calls, invites, webhooks update, the
+/// Fluxer-only meme/saved-message events, ...) still decode to
+/// [UnknownDispatchEvent] rather than being dropped, so a bot author can
+/// still react to them by name before a typed variant exists.
 ///
-/// A recurring theme verifying these against the reference client's TS
-/// handlers (`fluxer_app/src/features/**/events/*.ts`): several "update"
-/// and "delete" events carry a genuinely **partial** payload, not a full
+/// Verified against the reference client's TS handlers
+/// (`fluxer_app/src/features/**/events/*.ts`): several "update" and
+/// "delete" events carry a genuinely **partial** payload, not a full
 /// resource — the reference client itself only gets away with treating
 /// them as full types via unchecked TS `as` casts. Rather than risk a
 /// runtime crash decoding a field that's actually absent, those events
@@ -483,9 +482,8 @@ final class ChannelDeleteEvent extends GatewayEvent {
 }
 
 /// A DISPATCH event whose name isn't modeled by this version of
-/// `fluxer_gateway` yet. Carries the raw event name and payload so callers
-/// that need it can still branch on [eventName] while a proper typed
-/// variant is added in a later milestone.
+/// `fluxer_gateway`. Carries the raw event name and payload so callers can
+/// still branch on [eventName] without a typed variant.
 final class UnknownDispatchEvent extends GatewayEvent {
   const UnknownDispatchEvent(this.eventName, this.data);
 

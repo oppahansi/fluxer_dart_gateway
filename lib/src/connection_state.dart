@@ -2,13 +2,6 @@ import 'opcodes.dart';
 
 /// The gateway connection's lifecycle, as an explicit sealed state machine.
 ///
-/// This is deliberately not how Fluxer's own reference client tracks
-/// connection state (scattered nullable fields and booleans like
-/// `shouldReconnectImmediately`) — a real, exhaustively-`switch`-able state
-/// machine is the single highest-leverage maintainability choice in this
-/// package, since gateway reconnect logic is exactly where ad hoc state
-/// tends to rot first.
-///
 /// Valid transitions:
 /// ```
 /// Disconnected -> Connecting

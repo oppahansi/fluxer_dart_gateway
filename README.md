@@ -2,22 +2,23 @@
 
 WebSocket gateway client for the [fluxer.dart](https://github.com/oppahansi/fluxer.dart) ecosystem.
 
-Everything here was verified against Fluxer's own reference client source
-(`fluxerapp/fluxer` on GitHub — `packages/constants/src/GatewayConstants.ts`,
-`fluxer_app/.../GatewaySocket.ts`, `.../EventRouter.ts`), since Fluxer's
-public gateway docs are still unwritten placeholders.
+Everything here was verified against Fluxer's own source
+(`fluxerapp/fluxer` on GitHub), since Fluxer's public gateway docs are
+still unwritten placeholders: the reference client's TS event handlers
+(`fluxer_app/src/features/**/events/*.ts`) for dispatch payload shapes,
+and the gateway server's own Erlang source
+(`fluxer_gateway/src/gateway/gateway_sharding.erl`,
+`gateway_handler_identify.erl`) for the IDENTIFY/sharding wire format.
 
 ## Design
 
-Deliberately structured around an **explicit connection state machine**
+Structured around an **explicit connection state machine**
 (`Disconnected → Connecting → Identifying|Resuming → Connected →
-Reconnecting → Closed`) rather than the scattered nullable
-fields/booleans Fluxer's own TS client uses to track connection state
-(`shouldReconnectImmediately`, raw timeout IDs, etc.). Incoming events
-decode into a sealed `GatewayEvent` hierarchy for exhaustive `switch`
-handling instead of an untyped string-keyed handler map.
+Reconnecting → Closed`) for exhaustive `switch` handling of every
+transition. Incoming events decode into a sealed `GatewayEvent` hierarchy,
+also exhaustively `switch`-able.
 
-## What's here (v0.1 — M1 slice)
+## What's here
 
 - `GatewayOpcode` / `GatewayCloseCode` — the full verified opcode (0–16)
   and close code (4000–4012) tables.
@@ -25,17 +26,21 @@ handling instead of an untyped string-keyed handler map.
 - `HeartbeatManager` — jittered heartbeat scheduling + ack tracking,
   matching Fluxer's own jitter formula (`base = max(1000, interval*0.8)`,
   `jitter = min(1500, interval*0.05)`).
-- `GatewayEvent` — sealed dispatch event hierarchy covering `READY`,
-  `RESUMED`, `MESSAGE_CREATE`, `GUILD_CREATE` for M1, with an
-  `UnknownDispatchEvent` fallback for the ~50 other event names so
-  messages in event types we haven't modeled yet don't crash the
-  connection. Broadened in M3.
-- `GatewayConnection` — the orchestrator: HELLO → IDENTIFY/RESUME →
-  heartbeat loop → typed dispatch, behind a `GatewayTransport` interface
-  (so it's testable without a real socket).
-
-Sharding is structured into the design from day one (see the planning
-docs in this ecosystem) but not yet activated — M1 runs a single shard.
+- `GatewayEvent` — sealed dispatch event hierarchy covering 22 typed
+  events (session lifecycle, message create/update/delete/reactions/
+  typing, guild/role/member/ban CRUD, channel CRUD), with an
+  `UnknownDispatchEvent` fallback for event names not yet modeled so
+  those messages don't crash the connection.
+- `GatewayConnection` — the per-shard orchestrator: HELLO →
+  IDENTIFY/RESUME → heartbeat loop → typed dispatch, behind a
+  `GatewayTransport` interface (so it's testable without a real socket).
+  Reconnects with backoff on a recoverable close or dropped connection,
+  RESUMEs when the session allows it, falls back to a fresh IDENTIFY on
+  INVALID_SESSION or when the session doesn't survive the gap.
+- `GatewayShardManager` — owns one `GatewayConnection` per shard, merges
+  their event/state streams, and paces IDENTIFYs across
+  `session_start_limit.max_concurrency` buckets so shards don't all
+  identify at once.
 
 ## Part of the fluxer.dart ecosystem
 

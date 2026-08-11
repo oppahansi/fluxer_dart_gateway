@@ -19,8 +19,15 @@ import 'web_socket_gateway_transport.dart';
 /// `test/gateway_connection_test.dart` for a fake transport driving it
 /// through the happy path, RESUME, and reconnect scenarios.
 ///
+/// Deliberately not `final`: `fluxer.dart`'s `Bot` facade needs to mock
+/// this across the package boundary in its own tests (mocktail's
+/// `implements` trick doesn't work on `final`/`base` classes from another
+/// library), and there's no other reason to close it off — nothing here
+/// benefits from preventing a subclass the way sealed event/state
+/// hierarchies do.
+///
 /// [GatewayTransport]: package:fluxer_gateway/src/gateway_transport.dart
-final class GatewayConnection {
+class GatewayConnection {
   GatewayConnection({
     required this.gatewayUrl,
     required this.token,

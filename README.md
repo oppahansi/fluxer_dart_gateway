@@ -7,7 +7,7 @@ Everything here was verified against Fluxer's own source
 still unwritten placeholders: the reference client's TS event handlers
 (`fluxer_app/src/features/**/events/*.ts`) for dispatch payload shapes,
 and the gateway server's own Erlang source
-(`fluxer_dart_gateway/src/gateway/gateway_sharding.erl`,
+(`fluxer_gateway/src/gateway/gateway_sharding.erl`,
 `gateway_handler_identify.erl`) for the IDENTIFY/sharding wire format.
 
 ## Design

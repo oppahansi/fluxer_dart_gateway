@@ -42,6 +42,18 @@ also exhaustively `switch`-able.
   `session_start_limit.max_concurrency` buckets so shards don't all
   identify at once.
 
+## Fluxer version
+
+Verified against gateway protocol version `1` (the mandatory `?v=1`
+query param on the WebSocket URL — connecting without it closes with
+`invalidApiVersion`/4012 immediately after HELLO) and the opcode/close-
+code/dispatch-event tables read directly from `fluxerapp/fluxer`'s
+source, checked against a self-hosted instance running image tag `v1`
+as of 2026-08-12. Fluxer doesn't publish a gateway versioning policy or
+changelog, so nothing here is guaranteed to track future platform
+changes automatically — re-check the reference client's source before
+relying on identical behavior after Fluxer updates.
+
 ## Part of the fluxer_dart ecosystem
 
 | Package | Purpose |

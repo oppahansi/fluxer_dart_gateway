@@ -1,8 +1,7 @@
-/// Gateway opcodes, verified against
-/// `packages/constants/src/GatewayConstants.ts` (`export const GatewayOpcodes`)
-/// in the Fluxer source. Numbered almost identically to Discord's gateway —
-/// notably, 13 is unused (reserved/removed) and 5/12/14/15/16 are
-/// Fluxer-specific.
+/// Gateway opcodes.
+///
+/// 13 is unassigned. [voiceServerPing] and [gatewayError] are reserved
+/// and never appear on the wire in either direction.
 enum GatewayOpcode {
   dispatch(0),
   heartbeat(1),
@@ -33,9 +32,7 @@ enum GatewayOpcode {
   }
 }
 
-/// Gateway close codes, verified against
-/// `packages/constants/src/GatewayConstants.ts` (`export const GatewayCloseCodes`).
-/// 4010/4011/4012 match Discord's shard-related close codes exactly.
+/// Gateway close codes.
 enum GatewayCloseCode {
   unknownError(4000),
   unknownOpcode(4001),
@@ -61,12 +58,29 @@ enum GatewayCloseCode {
     return null;
   }
 
-  /// Whether a client should attempt to reconnect after being closed with
-  /// this code. Modeled on Fluxer's client behaviour: auth failures and
-  /// version mismatches are terminal, everything else is worth retrying.
+  /// Whether reconnecting with the same configuration can succeed.
+  ///
+  /// The codes that return `false` describe a rejected configuration —
+  /// bad credentials, an unsupported protocol version, or a shard the
+  /// server will not accept — so retrying without changing something
+  /// reproduces the same close. Everything else is transient.
   bool get isRecoverable => switch (this) {
+    GatewayCloseCode.notAuthenticated => false,
     GatewayCloseCode.authenticationFailed => false,
+    GatewayCloseCode.invalidShard => false,
+    GatewayCloseCode.shardingRequired => false,
     GatewayCloseCode.invalidApiVersion => false,
     _ => true,
+  };
+
+  /// Whether a retained session may be resumed after this close, as
+  /// opposed to requiring a fresh IDENTIFY.
+  ///
+  /// [invalidSeq] means the sequence sent with RESUME was rejected, so
+  /// the session has to be rebuilt even though reconnecting is fine.
+  bool get canResume => switch (this) {
+    GatewayCloseCode.invalidSeq => false,
+    GatewayCloseCode.sessionTimeout => false,
+    _ => isRecoverable,
   };
 }

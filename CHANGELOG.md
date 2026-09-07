@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.2.0
+
+- **Fixed:** a dispatch whose payload is not a JSON object no longer
+  throws out of the message handler and take the connection down with it.
+  `SESSIONS_REPLACE` sends a bare array, which crashed any bot whose
+  account had a second live session.
+- **Breaking:** `GatewayEvent.fromDispatch` takes `Object?` rather than
+  `Map<String, dynamic>`, and `UnknownDispatchEvent.data` is `Object?`,
+  because a dispatch payload is not guaranteed to be an object.
+- **Fixed:** `GatewayCloseCode.isRecoverable` now also reports
+  `notAuthenticated`, `invalidShard` and `shardingRequired` as terminal.
+  Reconnecting after those reproduces the same close. Added `canResume`,
+  which additionally excludes `invalidSeq` and `sessionTimeout`.
+- Ten new typed events: `MessageDeleteBulkEvent`,
+  `MessageReactionRemoveAllEvent`, `MessageReactionRemoveEmojiEvent`,
+  `ChannelPinsUpdateEvent`, `GuildEmojisUpdateEvent`,
+  `GuildStickersUpdateEvent`, `GuildAuditLogEntryCreateEvent`,
+  `WebhooksUpdateEvent`, `InviteCreateEvent`, `InviteDeleteEvent`, plus
+  `SessionsReplaceEvent`.
+- IDENTIFY gained `ignoredEvents`, `initialPresence`, `initialGuildId`
+  and `sessionFlags`. Fluxer has no intent bitfield; `ignoredEvents` is
+  how a session limits its traffic.
+- `SessionFlag` / `SessionFlags` for the IDENTIFY flags bitfield.
+- New client commands: `GatewayConnection.updatePresence` (opcode 3) and
+  `requestGuildMembers` (opcode 8).
+
 ## 0.1.0 — Initial release
 
 - `GatewayOpcode`/`GatewayCloseCode` — the full opcode (0–16) and close

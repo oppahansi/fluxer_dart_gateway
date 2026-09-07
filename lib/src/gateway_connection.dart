@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:fluxer_dart_core/fluxer_dart_core.dart';
 import 'package:fluxer_dart_utils/fluxer_dart_utils.dart';
 
 import 'connection_state.dart';
@@ -8,6 +9,7 @@ import 'gateway_event.dart';
 import 'gateway_transport.dart';
 import 'heartbeat_manager.dart';
 import 'opcodes.dart';
+import 'session_flags.dart';
 import 'web_socket_gateway_transport.dart';
 
 /// The gateway orchestrator: owns the connection state machine, drives the
@@ -30,6 +32,10 @@ class GatewayConnection {
     Map<String, dynamic>? properties,
     Logger? logger,
     RetryPolicy? reconnectPolicy,
+    this.ignoredEvents = const {},
+    this.initialPresence,
+    this.initialGuildId,
+    this.sessionFlags = SessionFlags.none,
   }) : assert(
          (shardId == null) == (shardCount == null),
          'shardId and shardCount must be given together',
@@ -58,6 +64,26 @@ class GatewayConnection {
   /// omitted from IDENTIFY entirely.
   final int? shardId;
   final int? shardCount;
+
+  /// DISPATCH names the server drops before they reach this session.
+  ///
+  /// Fluxer has no intent bitfield; suppressing unwanted traffic is done
+  /// here instead. Up to 256 names, matched case-insensitively. A
+  /// `MESSAGE_CREATE` still arrives despite being listed if the message
+  /// mentions this session's user, or sets `mention_here` or
+  /// `mention_everyone`. Suppressed dispatches consume no sequence
+  /// number, so listing an event leaves no gaps behind.
+  final Set<String> ignoredEvents;
+
+  /// Presence published with IDENTIFY. Omitted leaves the account's
+  /// current presence untouched.
+  final Presence? initialPresence;
+
+  /// Guild marked active for this session at IDENTIFY.
+  final Snowflake? initialGuildId;
+
+  /// Session behaviour flags sent with IDENTIFY.
+  final SessionFlags sessionFlags;
 
   final GatewayTransport Function(Uri) _transportFactory;
 
@@ -143,7 +169,7 @@ class GatewayConnection {
         );
         _sessionId == null ? _sendIdentify() : _sendResume();
       case GatewayOpcode.dispatch:
-        _handleDispatch(json['t'] as String, json['d'] as Map<String, dynamic>);
+        _handleDispatch(json['t'] as String, json['d']);
       case GatewayOpcode.heartbeatAck:
         _heartbeatManager?.acknowledge();
       case GatewayOpcode.heartbeat:
@@ -176,7 +202,9 @@ class GatewayConnection {
     }
   }
 
-  void _handleDispatch(String eventName, Map<String, dynamic> data) {
+  /// [data] is untyped because a dispatch payload is not always a JSON
+  /// object; see [GatewayEvent.fromDispatch].
+  void _handleDispatch(String eventName, Object? data) {
     // DEBUG, not INFO: fires once per message/reaction/typing tick on an
     // active bot, which would be too noisy for INFO. INFO is reserved for
     // session lifecycle (connect/identify/resume/READY).
@@ -214,6 +242,17 @@ class GatewayConnection {
       case ChannelCreateEvent():
       case ChannelUpdateEvent():
       case ChannelDeleteEvent():
+      case MessageDeleteBulkEvent():
+      case MessageReactionRemoveAllEvent():
+      case MessageReactionRemoveEmojiEvent():
+      case ChannelPinsUpdateEvent():
+      case GuildEmojisUpdateEvent():
+      case GuildStickersUpdateEvent():
+      case GuildAuditLogEntryCreateEvent():
+      case WebhooksUpdateEvent():
+      case InviteCreateEvent():
+      case InviteDeleteEvent():
+      case SessionsReplaceEvent():
       case UnknownDispatchEvent():
         break;
     }
@@ -227,7 +266,14 @@ class GatewayConnection {
       'd': {
         'token': token,
         'properties': properties,
-        'flags': 0,
+        'flags': sessionFlags.value,
+        if (ignoredEvents.isNotEmpty)
+          'ignored_events': ignoredEvents
+              .map((e) => e.toUpperCase())
+              .toList(growable: false),
+        if (initialPresence != null) 'presence': initialPresence!.toJson(),
+        if (initialGuildId != null)
+          'initial_guild_id': initialGuildId!.toJson(),
         if (shardId != null) 'shard': [shardId, shardCount],
       },
     });
@@ -243,6 +289,47 @@ class GatewayConnection {
     _send({
       'op': GatewayOpcode.resume.value,
       'd': {'token': token, 'session_id': sessionId, 'seq': _sequence},
+    });
+  }
+
+  /// Replaces this session's published presence.
+  ///
+  /// Rate limited to five commands per 20 seconds; the server drops
+  /// excess commands rather than answering them, and there is no
+  /// acknowledgement either way.
+  void updatePresence(Presence presence) {
+    _send({'op': GatewayOpcode.presenceUpdate.value, 'd': presence.toJson()});
+  }
+
+  /// Asks for guild members, answered asynchronously as one or more
+  /// `GUILD_MEMBERS_CHUNK` dispatches rather than a return value.
+  ///
+  /// A bot may have one request in flight per guild, and the guild is
+  /// rate limited for 30 seconds afterwards. [limit] caps results at 100;
+  /// leaving it at 0 with a [query] set returns 25, and leaving both
+  /// unset requests the full member list, which additionally requires one
+  /// of `manageRoles`, `kickMembers` or `banMembers`. [nonce] is echoed
+  /// back on the resulting chunks so concurrent requests can be told
+  /// apart, and is capped at 32 bytes.
+  void requestGuildMembers(
+    Snowflake guildId, {
+    String query = '',
+    int limit = 0,
+    List<Snowflake> userIds = const [],
+    bool presences = false,
+    String? nonce,
+  }) {
+    _send({
+      'op': GatewayOpcode.requestGuildMembers.value,
+      'd': {
+        'guild_id': guildId.toJson(),
+        'query': query,
+        'limit': limit,
+        if (userIds.isNotEmpty)
+          'user_ids': userIds.map((id) => id.toJson()).toList(growable: false),
+        if (presences) 'presences': true,
+        'nonce': ?nonce,
+      },
     });
   }
 

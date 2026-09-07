@@ -2,37 +2,48 @@ import 'package:fluxer_dart_core/fluxer_dart_core.dart';
 
 /// A decoded DISPATCH (opcode 0) payload.
 ///
-/// Sealed so consumers get exhaustive-`switch` safety instead of Fluxer's
-/// own client's untyped `Map<string, handler>` event registry. Covers
-/// session lifecycle (READY, RESUMED) and the ~18 events that cover
-/// typical moderation/utility bot needs (message edits/deletes/reactions,
-/// channel and role CRUD, member join/leave, bans, typing). The remaining
-/// events (presence, voice states, calls, invites, webhooks update, the
-/// Fluxer-only meme/saved-message events, ...) still decode to
-/// [UnknownDispatchEvent] rather than being dropped, so a bot author can
-/// still react to them by name before a typed variant exists.
+/// Sealed, so a `switch` over an event value is checked for
+/// exhaustiveness at compile time. Covers session lifecycle plus the
+/// message, reaction, pin, channel, role, member, ban, emoji, sticker,
+/// invite, webhook and audit-log events a moderation or utility bot acts
+/// on. Every other dispatch name decodes to [UnknownDispatchEvent],
+/// carrying its raw payload, rather than being dropped.
 ///
-/// Several "update"/"remove" events carry a genuinely **partial**
-/// payload, not a full resource. Some of that was caught cross-checking
-/// the reference client's TS handlers (`fluxer_app/src/features/**/
-/// events/*.ts`) against their own unchecked `as` casts
-/// (`ChannelUpdateEvent`, `MessageUpdateEvent`); `GuildMemberRemoveEvent`/
-/// `GuildBanAddEvent`/`GuildBanRemoveEvent` looked fully-typed by the
-/// same TS check but turned out to only carry `{id}` for their `user`
-/// field on the real wire — caught by a live cast-error crash, not by
-/// reading source, so carry just [Snowflake] ids now instead of a
-/// decoded [User]. The lesson generalizes: a TS type on the reference
-/// client is what it *claims* to send, not proof of what it actually
-/// does.
+/// Several update and remove events carry a **partial** payload rather
+/// than a full resource, and the partial form is not always narrower in
+/// the way the same-named REST response would suggest:
+///
+/// - [MessageUpdateEvent] and [ChannelUpdateEvent] carry only the fields
+///   that changed.
+/// - [GuildMemberRemoveEvent], [GuildBanAddEvent] and
+///   [GuildBanRemoveEvent] carry a `user` object holding nothing but
+///   `id`, so they expose a [Snowflake] instead of a decoded [User].
+/// - [MessageDeleteBulkEvent] names its id list `ids`, not the
+///   `message_ids` its REST counterpart accepts.
+/// - [ChannelPinsUpdateEvent] and [WebhooksUpdateEvent] carry no
+///   resource data at all; acting on them requires a REST fetch.
 sealed class GatewayEvent {
   const GatewayEvent();
 
-  /// Decodes a raw `{t: eventName, d: payload}` DISPATCH body into a typed
-  /// event, or [UnknownDispatchEvent] if [eventName] isn't modeled yet.
-  factory GatewayEvent.fromDispatch(
-    String eventName,
-    Map<String, dynamic> data,
-  ) {
+  /// Decodes a raw `{t: eventName, d: payload}` DISPATCH body into a
+  /// typed event, or [UnknownDispatchEvent] if [eventName] is not
+  /// modelled.
+  ///
+  /// [data] is typed as `Object?` because a dispatch payload is not
+  /// always a JSON object: `SESSIONS_REPLACE` sends a bare array, and an
+  /// unmodelled event may send anything. Events whose payload must be an
+  /// object are decoded only after that is checked.
+  factory GatewayEvent.fromDispatch(String eventName, Object? payload) {
+    if (eventName == 'SESSIONS_REPLACE') {
+      return SessionsReplaceEvent.fromJson(payload);
+    }
+    if (payload is! Map) {
+      return UnknownDispatchEvent(eventName, payload);
+    }
+    // Widened rather than cast directly: a payload decoded from JSON is
+    // always Map<String, dynamic>, but one built in a test or forwarded
+    // from another decoder may carry a narrower value type.
+    final data = payload.cast<String, dynamic>();
     return switch (eventName) {
       'READY' => ReadyEvent.fromJson(data),
       'RESUMED' => const ResumedEvent(),
@@ -41,6 +52,13 @@ sealed class GatewayEvent {
       'MESSAGE_DELETE' => MessageDeleteEvent.fromJson(data),
       'MESSAGE_REACTION_ADD' => MessageReactionAddEvent.fromJson(data),
       'MESSAGE_REACTION_REMOVE' => MessageReactionRemoveEvent.fromJson(data),
+      'MESSAGE_DELETE_BULK' => MessageDeleteBulkEvent.fromJson(data),
+      'MESSAGE_REACTION_REMOVE_ALL' => MessageReactionRemoveAllEvent.fromJson(
+        data,
+      ),
+      'MESSAGE_REACTION_REMOVE_EMOJI' =>
+        MessageReactionRemoveEmojiEvent.fromJson(data),
+      'CHANNEL_PINS_UPDATE' => ChannelPinsUpdateEvent.fromJson(data),
       'TYPING_START' => TypingStartEvent.fromJson(data),
       'GUILD_CREATE' => GuildCreateEvent(Guild.fromGuildCreateJson(data)),
       'GUILD_UPDATE' => GuildUpdateEvent(Guild.fromJson(data)),
@@ -56,6 +74,14 @@ sealed class GatewayEvent {
       'CHANNEL_CREATE' => ChannelCreateEvent(Channel.fromJson(data)),
       'CHANNEL_UPDATE' => ChannelUpdateEvent.fromJson(data),
       'CHANNEL_DELETE' => ChannelDeleteEvent.fromJson(data),
+      'GUILD_EMOJIS_UPDATE' => GuildEmojisUpdateEvent.fromJson(data),
+      'GUILD_STICKERS_UPDATE' => GuildStickersUpdateEvent.fromJson(data),
+      'GUILD_AUDIT_LOG_ENTRY_CREATE' => GuildAuditLogEntryCreateEvent.fromJson(
+        data,
+      ),
+      'WEBHOOKS_UPDATE' => WebhooksUpdateEvent.fromJson(data),
+      'INVITE_CREATE' => InviteCreateEvent.fromJson(data),
+      'INVITE_DELETE' => InviteDeleteEvent.fromJson(data),
       _ => UnknownDispatchEvent(eventName, data),
     };
   }
@@ -493,14 +519,336 @@ final class ChannelDeleteEvent extends GatewayEvent {
   String toString() => 'ChannelDeleteEvent($channelId)';
 }
 
-/// A DISPATCH event whose name isn't modeled by this version of
-/// `fluxer_dart_gateway`. Carries the raw event name and payload so callers can
-/// still branch on [eventName] without a typed variant.
+/// Several messages deleted in one operation, from a bulk-delete call.
+final class MessageDeleteBulkEvent extends GatewayEvent {
+  const MessageDeleteBulkEvent({
+    required this.messageIds,
+    required this.channelId,
+    required this.guildId,
+  });
+
+  /// The id list arrives under `ids`, not the `message_ids` key the
+  /// bulk-delete request body uses.
+  factory MessageDeleteBulkEvent.fromJson(Map<String, dynamic> json) =>
+      MessageDeleteBulkEvent(
+        messageIds: (json['ids'] as List<dynamic>)
+            .map((id) => Snowflake.parse(id as String))
+            .toList(growable: false),
+        channelId: Snowflake.parse(json['channel_id'] as String),
+        guildId: (json['guild_id'] as String?)?.let(Snowflake.parse),
+      );
+
+  final List<Snowflake> messageIds;
+  final Snowflake channelId;
+
+  /// `null` in a DM.
+  final Snowflake? guildId;
+
+  @override
+  String toString() => 'MessageDeleteBulkEvent(${messageIds.length} messages)';
+}
+
+/// Every reaction cleared from a message at once.
+final class MessageReactionRemoveAllEvent extends GatewayEvent {
+  const MessageReactionRemoveAllEvent({
+    required this.messageId,
+    required this.channelId,
+    required this.guildId,
+  });
+
+  factory MessageReactionRemoveAllEvent.fromJson(Map<String, dynamic> json) =>
+      MessageReactionRemoveAllEvent(
+        messageId: Snowflake.parse(json['message_id'] as String),
+        channelId: Snowflake.parse(json['channel_id'] as String),
+        guildId: (json['guild_id'] as String?)?.let(Snowflake.parse),
+      );
+
+  final Snowflake messageId;
+  final Snowflake channelId;
+  final Snowflake? guildId;
+
+  @override
+  String toString() => 'MessageReactionRemoveAllEvent($messageId)';
+}
+
+/// Every reaction using one specific emoji cleared from a message.
+final class MessageReactionRemoveEmojiEvent extends GatewayEvent {
+  const MessageReactionRemoveEmojiEvent({
+    required this.messageId,
+    required this.channelId,
+    required this.emoji,
+    required this.guildId,
+  });
+
+  factory MessageReactionRemoveEmojiEvent.fromJson(Map<String, dynamic> json) =>
+      MessageReactionRemoveEmojiEvent(
+        messageId: Snowflake.parse(json['message_id'] as String),
+        channelId: Snowflake.parse(json['channel_id'] as String),
+        emoji: ReactionEmoji.fromJson(json['emoji'] as Map<String, dynamic>),
+        guildId: (json['guild_id'] as String?)?.let(Snowflake.parse),
+      );
+
+  final Snowflake messageId;
+  final Snowflake channelId;
+  final ReactionEmoji emoji;
+  final Snowflake? guildId;
+
+  @override
+  String toString() => 'MessageReactionRemoveEmojiEvent($messageId, $emoji)';
+}
+
+/// A channel's pinned-message set changed.
+///
+/// Carries only the timestamp of the most recent pin, so acting on the
+/// change means re-listing the channel's pins.
+final class ChannelPinsUpdateEvent extends GatewayEvent {
+  const ChannelPinsUpdateEvent({
+    required this.channelId,
+    required this.guildId,
+    required this.lastPinTimestamp,
+  });
+
+  factory ChannelPinsUpdateEvent.fromJson(Map<String, dynamic> json) =>
+      ChannelPinsUpdateEvent(
+        channelId: Snowflake.parse(json['channel_id'] as String),
+        guildId: (json['guild_id'] as String?)?.let(Snowflake.parse),
+        lastPinTimestamp: (json['last_pin_timestamp'] as String?)?.let(
+          DateTime.parse,
+        ),
+      );
+
+  final Snowflake channelId;
+  final Snowflake? guildId;
+
+  /// `null` once the last pin is removed.
+  final DateTime? lastPinTimestamp;
+
+  @override
+  String toString() => 'ChannelPinsUpdateEvent($channelId)';
+}
+
+/// A guild's emoji set was replaced.
+///
+/// The payload carries the full resulting collection rather than a delta,
+/// so [emojis] is the guild's complete emoji list after the change.
+final class GuildEmojisUpdateEvent extends GatewayEvent {
+  const GuildEmojisUpdateEvent({required this.guildId, required this.emojis});
+
+  factory GuildEmojisUpdateEvent.fromJson(Map<String, dynamic> json) =>
+      GuildEmojisUpdateEvent(
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        emojis: (json['emojis'] as List<dynamic>)
+            .map((e) => GuildEmoji.fromJson(e as Map<String, dynamic>))
+            .toList(growable: false),
+      );
+
+  final Snowflake guildId;
+  final List<GuildEmoji> emojis;
+
+  @override
+  String toString() => 'GuildEmojisUpdateEvent(${emojis.length} emojis)';
+}
+
+/// A guild's sticker set was replaced. Like [GuildEmojisUpdateEvent], the
+/// payload is the full resulting collection.
+final class GuildStickersUpdateEvent extends GatewayEvent {
+  const GuildStickersUpdateEvent({
+    required this.guildId,
+    required this.stickers,
+  });
+
+  factory GuildStickersUpdateEvent.fromJson(Map<String, dynamic> json) =>
+      GuildStickersUpdateEvent(
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        stickers: (json['stickers'] as List<dynamic>)
+            .map((e) => GuildSticker.fromJson(e as Map<String, dynamic>))
+            .toList(growable: false),
+      );
+
+  final Snowflake guildId;
+  final List<GuildSticker> stickers;
+
+  @override
+  String toString() => 'GuildStickersUpdateEvent(${stickers.length} stickers)';
+}
+
+/// An audit log entry was written.
+///
+/// Delivered to sessions holding `viewAuditLog`, and carries the same
+/// entry shape the audit log REST route returns plus the originating
+/// guild and, for some action types, a `changes` array the REST model
+/// does not expose.
+final class GuildAuditLogEntryCreateEvent extends GatewayEvent {
+  const GuildAuditLogEntryCreateEvent({
+    required this.guildId,
+    required this.entry,
+    required this.changes,
+  });
+
+  factory GuildAuditLogEntryCreateEvent.fromJson(Map<String, dynamic> json) =>
+      GuildAuditLogEntryCreateEvent(
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        entry: GuildAuditLogEntry.fromJson(json),
+        changes:
+            (json['changes'] as List<dynamic>?)
+                ?.cast<Map<String, dynamic>>()
+                .toList(growable: false) ??
+            const [],
+      );
+
+  final Snowflake guildId;
+  final GuildAuditLogEntry entry;
+
+  /// Raw `{key, old_value, new_value}` objects. The value types depend on
+  /// which field changed, so they stay undecoded.
+  final List<Map<String, dynamic>> changes;
+
+  @override
+  String toString() => 'GuildAuditLogEntryCreateEvent(${entry.actionType})';
+}
+
+/// A channel's webhook set changed.
+///
+/// Carries no webhook data at all, so acting on it means re-listing the
+/// channel's webhooks.
+final class WebhooksUpdateEvent extends GatewayEvent {
+  const WebhooksUpdateEvent({required this.channelId, required this.guildId});
+
+  factory WebhooksUpdateEvent.fromJson(Map<String, dynamic> json) =>
+      WebhooksUpdateEvent(
+        channelId: Snowflake.parse(json['channel_id'] as String),
+        guildId: Snowflake.parse(json['guild_id'] as String),
+      );
+
+  final Snowflake channelId;
+  final Snowflake guildId;
+
+  @override
+  String toString() => 'WebhooksUpdateEvent($channelId)';
+}
+
+/// An invite was created.
+///
+/// The payload nests partial `channel` and `guild` objects rather than
+/// repeating the full resources, so only their ids are decoded here.
+final class InviteCreateEvent extends GatewayEvent {
+  const InviteCreateEvent({
+    required this.code,
+    required this.channelId,
+    required this.guildId,
+    required this.inviter,
+    required this.createdAt,
+    required this.expiresAt,
+    required this.maxAge,
+    required this.maxUses,
+  });
+
+  factory InviteCreateEvent.fromJson(Map<String, dynamic> json) =>
+      InviteCreateEvent(
+        code: json['code'] as String,
+        channelId: Snowflake.parse(
+          (json['channel'] as Map<String, dynamic>)['id'] as String,
+        ),
+        guildId: (json['guild_id'] as String?)?.let(Snowflake.parse),
+        inviter: (json['inviter'] as Map<String, dynamic>?)?.let(User.fromJson),
+        createdAt: DateTime.parse(json['created_at'] as String),
+        expiresAt: (json['expires_at'] as String?)?.let(DateTime.parse),
+        maxAge: json['max_age'] as int?,
+        maxUses: json['max_uses'] as int?,
+      );
+
+  final String code;
+  final Snowflake channelId;
+  final Snowflake? guildId;
+
+  /// `null` for an invite created by a route that does not attribute one.
+  final User? inviter;
+  final DateTime createdAt;
+
+  /// `null` for an invite that never expires.
+  final DateTime? expiresAt;
+
+  /// Lifetime in seconds; `0` means no expiry.
+  final int? maxAge;
+
+  /// `0` means unlimited uses.
+  final int? maxUses;
+
+  @override
+  String toString() => 'InviteCreateEvent($code)';
+}
+
+/// An invite was deleted or expired.
+final class InviteDeleteEvent extends GatewayEvent {
+  const InviteDeleteEvent({
+    required this.code,
+    required this.channelId,
+    required this.guildId,
+  });
+
+  factory InviteDeleteEvent.fromJson(Map<String, dynamic> json) =>
+      InviteDeleteEvent(
+        code: json['code'] as String,
+        channelId: Snowflake.parse(json['channel_id'] as String),
+        guildId: (json['guild_id'] as String?)?.let(Snowflake.parse),
+      );
+
+  final String code;
+  final Snowflake channelId;
+  final Snowflake? guildId;
+
+  @override
+  String toString() => 'InviteDeleteEvent($code)';
+}
+
+/// The account's set of live gateway sessions was replaced.
+///
+/// The payload is a bare JSON array rather than an object, and it
+/// describes every session on the account, not just this one. It arrives
+/// whenever another session for the same token connects or disconnects,
+/// which for a bot most often means a reconnect leaving a stale entry
+/// behind.
+final class SessionsReplaceEvent extends GatewayEvent {
+  const SessionsReplaceEvent(this.sessions);
+
+  factory SessionsReplaceEvent.fromJson(Object? payload) =>
+      SessionsReplaceEvent(switch (payload) {
+        final List<dynamic> entries =>
+          entries
+              .whereType<Map<String, dynamic>>()
+              .map(SessionPresence.fromJson)
+              .toList(growable: false),
+        _ => const [],
+      });
+
+  final List<SessionPresence> sessions;
+
+  /// The per-connection entries, excluding the account-wide aggregate.
+  Iterable<SessionPresence> get connections =>
+      sessions.where((s) => !s.isAggregate);
+
+  /// The account-wide aggregate entry, when present.
+  SessionPresence? get aggregate =>
+      sessions.where((s) => s.isAggregate).firstOrNull;
+
+  @override
+  String toString() => 'SessionsReplaceEvent(${sessions.length} sessions)';
+}
+
+/// A DISPATCH event whose name is not modelled by this version of
+/// `fluxer_dart_gateway`.
+///
+/// Carries the raw event name and payload so a caller can still branch on
+/// [eventName] without a typed variant. [data] is `Object?` because a
+/// dispatch payload is not guaranteed to be a JSON object.
 final class UnknownDispatchEvent extends GatewayEvent {
   const UnknownDispatchEvent(this.eventName, this.data);
 
   final String eventName;
-  final Map<String, dynamic> data;
+
+  /// Usually a `Map<String, dynamic>`, but an array or scalar for events
+  /// that send one.
+  final Object? data;
 
   @override
   String toString() => 'UnknownDispatchEvent($eventName)';

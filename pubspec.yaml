@@ -3,7 +3,7 @@ description: >-
   WebSocket gateway client for Fluxer: an explicit connection state
   machine, heartbeat management, typed dispatch events, and multi-shard
   support with reconnect/resume handling.
-version: 0.1.0
+version: 0.2.0
 homepage: https://github.com/oppahansi/fluxer_dart_gateway
 repository: https://github.com/oppahansi/fluxer_dart_gateway
 # Not on pub.dev yet — remove this line once it's actually published there.
@@ -20,7 +20,7 @@ dependencies:
   fluxer_dart_core:
     git:
       url: https://github.com/oppahansi/fluxer_dart_core.git
-      ref: v0.1.0
+      ref: v0.2.0
   fluxer_dart_utils:
     git:
       url: https://github.com/oppahansi/fluxer_dart_utils.git

@@ -2,13 +2,22 @@
 
 WebSocket gateway client for the [fluxer_dart](https://github.com/oppahansi/fluxer_dart) ecosystem.
 
-Everything here was verified against Fluxer's own source
-(`fluxerapp/fluxer` on GitHub), since Fluxer's public gateway docs are
-still unwritten placeholders: the reference client's TS event handlers
-(`fluxer_app/src/features/**/events/*.ts`) for dispatch payload shapes,
-and the gateway server's own Erlang source
-(`fluxer_gateway/src/gateway/gateway_sharding.erl`,
-`gateway_handler_identify.erl`) for the IDENTIFY/sharding wire format.
+Opcodes, close codes, and the client commands follow
+[Fluxer's gateway reference](https://docs.fluxer.app/gateway/), with the
+sharding and IDENTIFY wire format cross-checked against the gateway
+server's own Erlang source (`fluxer_gateway/src/gateway/`), which is
+where sharding is actually enforced.
+
+Dispatch payloads are modelled from recorded live traffic. No schema
+covers them — the OpenAPI document describes REST only — and several
+differ from the same-named REST response in ways that are not guessable:
+`GUILD_CREATE` nests its guild fields under `properties`,
+`MESSAGE_DELETE_BULK` names its id list `ids`, ban and member-remove
+events carry a `user` object holding nothing but `id`, and
+`SESSIONS_REPLACE` sends a bare JSON array rather than an object.
+
+Fluxer has no intent bitfield. A session limits its traffic with
+`ignoredEvents` at IDENTIFY instead.
 
 ## Design
 

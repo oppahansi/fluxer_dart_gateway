@@ -10,4 +10,5 @@ export 'src/gateway_shard_manager.dart';
 export 'src/gateway_transport.dart';
 export 'src/heartbeat_manager.dart';
 export 'src/opcodes.dart';
+export 'src/session_flags.dart';
 export 'src/web_socket_gateway_transport.dart';

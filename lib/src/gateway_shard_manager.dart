@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:fluxer_dart_core/fluxer_dart_core.dart';
 import 'package:fluxer_dart_utils/fluxer_dart_utils.dart';
 
 import 'connection_state.dart';
 import 'gateway_connection.dart';
 import 'gateway_event.dart';
 import 'gateway_transport.dart';
+import 'session_flags.dart';
 
 /// A [GatewayConnectionState] tagged with which shard it belongs to, as
 /// delivered on [GatewayShardManager.stateChanges].
@@ -32,6 +34,9 @@ final class GatewayShardManager {
     Map<String, dynamic>? properties,
     Logger? logger,
     RetryPolicy? reconnectPolicy,
+    Set<String> ignoredEvents = const {},
+    Presence? initialPresence,
+    SessionFlags sessionFlags = SessionFlags.none,
   }) : logger = logger ?? const NoopLogger(),
        shards = List.generate(
          shardCount,
@@ -46,6 +51,9 @@ final class GatewayShardManager {
                properties: properties,
                logger: logger,
                reconnectPolicy: reconnectPolicy,
+               ignoredEvents: ignoredEvents,
+               initialPresence: initialPresence,
+               sessionFlags: sessionFlags,
              ))(id, shardCount),
        );
 

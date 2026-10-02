@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- No functional change. Re-released to pin `fluxer_dart_core` 0.3.0,
+  which carries decoding fixes this package's dispatch decoding depends
+  on: a webhook without a token, and a message reference without a
+  message id.
+
 ## 0.2.0
 
 - **Fixed:** a dispatch whose payload is not a JSON object no longer

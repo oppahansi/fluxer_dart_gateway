@@ -3,7 +3,12 @@ enum SessionFlag {
   /// Coalesce bursts of reaction additions into
   /// `MESSAGE_REACTION_ADD_MANY` dispatches instead of delivering one
   /// `MESSAGE_REACTION_ADD` per reaction.
-  debounceMessageReactions(1 << 1);
+  debounceMessageReactions(1 << 1),
+
+  /// Declares that the client can parse thread, forum and media
+  /// channels. A user session without it receives none of them and no
+  /// thread event. A bot session receives them whether or not it is set.
+  channelThreads(1 << 2);
 
   const SessionFlag(this.bit);
 

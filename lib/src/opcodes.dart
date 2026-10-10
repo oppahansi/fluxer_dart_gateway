@@ -1,6 +1,6 @@
 /// Gateway opcodes.
 ///
-/// 13 is unassigned. [voiceServerPing] and [gatewayError] are reserved
+/// 13 and 17 through 27 are unassigned. [voiceServerPing] and [gatewayError] are reserved
 /// and never appear on the wire in either direction.
 enum GatewayOpcode {
   dispatch(0),
@@ -18,7 +18,8 @@ enum GatewayOpcode {
   gatewayError(12),
   lazyRequest(14),
   requestGuildCounts(15),
-  requestChannelMemberCounts(16);
+  requestChannelMemberCounts(16),
+  requestForumUnreads(28);
 
   const GatewayOpcode(this.value);
 

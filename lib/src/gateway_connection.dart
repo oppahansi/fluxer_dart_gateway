@@ -197,6 +197,7 @@ class GatewayConnection {
       case GatewayOpcode.lazyRequest:
       case GatewayOpcode.requestGuildCounts:
       case GatewayOpcode.requestChannelMemberCounts:
+      case GatewayOpcode.requestForumUnreads:
       case null:
         logger.debug('Unhandled/outbound-only opcode received: ${json['op']}');
     }
@@ -252,6 +253,12 @@ class GatewayConnection {
       case WebhooksUpdateEvent():
       case InviteCreateEvent():
       case InviteDeleteEvent():
+      case ThreadCreateEvent():
+      case ThreadUpdateEvent():
+      case ThreadDeleteEvent():
+      case ThreadListSyncEvent():
+      case ThreadMemberUpdateEvent():
+      case ThreadMembersUpdateEvent():
       case SessionsReplaceEvent():
       case UnknownDispatchEvent():
         break;

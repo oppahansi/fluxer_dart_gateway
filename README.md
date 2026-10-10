@@ -35,9 +35,9 @@ also exhaustively `switch`-able.
 - `HeartbeatManager` — jittered heartbeat scheduling + ack tracking,
   matching Fluxer's own jitter formula (`base = max(1000, interval*0.8)`,
   `jitter = min(1500, interval*0.05)`).
-- `GatewayEvent` — sealed dispatch event hierarchy covering 22 typed
+- `GatewayEvent` — sealed dispatch event hierarchy covering 39 typed
   events (session lifecycle, message create/update/delete/reactions/
-  typing, guild/role/member/ban CRUD, channel CRUD), with an
+  typing, guild/role/member/ban CRUD, channel CRUD, threads), with an
   `UnknownDispatchEvent` fallback for event names not yet modeled so
   those messages don't crash the connection.
 - `GatewayConnection` — the per-shard orchestrator: HELLO →

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.0
+
+- Six thread events: `ThreadCreateEvent`, `ThreadUpdateEvent`,
+  `ThreadDeleteEvent`, `ThreadListSyncEvent`, `ThreadMemberUpdateEvent`
+  and `ThreadMembersUpdateEvent`. They previously arrived as
+  `UnknownDispatchEvent`. Create and update carry the whole thread, not a
+  partial.
+- **Breaking for exhaustive switches:** a `switch` over `GatewayEvent`
+  without a default now has to handle the six new variants.
+- `GuildCreateEvent.threads` lists the guild's active threads the session
+  can view. `GuildCreateEvent` gained a `fromJson` factory to decode it.
+- `SessionFlag.channelThreads`. A bot session receives threads without
+  it; it is there for user sessions.
+- `GatewayOpcode.requestForumUnreads` (28).
+- `THREAD_MEMBER_LIST_UPDATE` and `FORUM_UNREADS` are not modelled. Both
+  answer a subscription this package does not send.
+
 ## 0.3.0
 
 - No functional change. Re-released to pin `fluxer_dart_core` 0.3.0,

@@ -4,9 +4,9 @@ import 'package:fluxer_dart_core/fluxer_dart_core.dart';
 ///
 /// Sealed, so a `switch` over an event value is checked for
 /// exhaustiveness at compile time. Covers session lifecycle plus the
-/// message, reaction, pin, channel, role, member, ban, emoji, sticker,
-/// invite, webhook and audit-log events a moderation or utility bot acts
-/// on. Every other dispatch name decodes to [UnknownDispatchEvent],
+/// message, reaction, pin, channel, thread, role, member, ban, emoji,
+/// sticker, invite, webhook and audit-log events a moderation or utility
+/// bot acts on. Every other dispatch name decodes to [UnknownDispatchEvent],
 /// carrying its raw payload, rather than being dropped.
 ///
 /// Several update and remove events carry a **partial** payload rather
@@ -60,7 +60,7 @@ sealed class GatewayEvent {
         MessageReactionRemoveEmojiEvent.fromJson(data),
       'CHANNEL_PINS_UPDATE' => ChannelPinsUpdateEvent.fromJson(data),
       'TYPING_START' => TypingStartEvent.fromJson(data),
-      'GUILD_CREATE' => GuildCreateEvent(Guild.fromGuildCreateJson(data)),
+      'GUILD_CREATE' => GuildCreateEvent.fromJson(data),
       'GUILD_UPDATE' => GuildUpdateEvent(Guild.fromJson(data)),
       'GUILD_DELETE' => GuildDeleteEvent.fromJson(data),
       'GUILD_ROLE_CREATE' => GuildRoleCreateEvent.fromJson(data),
@@ -82,6 +82,12 @@ sealed class GatewayEvent {
       'WEBHOOKS_UPDATE' => WebhooksUpdateEvent.fromJson(data),
       'INVITE_CREATE' => InviteCreateEvent.fromJson(data),
       'INVITE_DELETE' => InviteDeleteEvent.fromJson(data),
+      'THREAD_CREATE' => ThreadCreateEvent.fromJson(data),
+      'THREAD_UPDATE' => ThreadUpdateEvent(ThreadChannel.fromJson(data)),
+      'THREAD_DELETE' => ThreadDeleteEvent.fromJson(data),
+      'THREAD_LIST_SYNC' => ThreadListSyncEvent.fromJson(data),
+      'THREAD_MEMBER_UPDATE' => ThreadMemberUpdateEvent.fromJson(data),
+      'THREAD_MEMBERS_UPDATE' => ThreadMembersUpdateEvent.fromJson(data),
       _ => UnknownDispatchEvent(eventName, data),
     };
   }
@@ -125,9 +131,22 @@ final class MessageCreateEvent extends GatewayEvent {
 }
 
 final class GuildCreateEvent extends GatewayEvent {
-  const GuildCreateEvent(this.guild);
+  const GuildCreateEvent(this.guild, {this.threads = const []});
+
+  factory GuildCreateEvent.fromJson(Map<String, dynamic> json) =>
+      GuildCreateEvent(
+        Guild.fromGuildCreateJson(json),
+        threads: (json['threads'] as List<dynamic>? ?? const [])
+            .map((t) => ThreadChannel.fromJson(t as Map<String, dynamic>))
+            .toList(growable: false),
+      );
 
   final Guild guild;
+
+  /// The guild's active threads this session can view. A thread the
+  /// session has joined carries its [ThreadChannel.member], without the
+  /// thread and user ids that object has elsewhere.
+  final List<ThreadChannel> threads;
 
   @override
   String toString() => 'GuildCreateEvent($guild)';
@@ -517,6 +536,179 @@ final class ChannelDeleteEvent extends GatewayEvent {
 
   @override
   String toString() => 'ChannelDeleteEvent($channelId)';
+}
+
+// --- Thread events --------------------------------------------------------
+
+/// A thread was created, or this session's user was added to one.
+///
+/// Unlike [ChannelUpdateEvent], thread events carry the whole thread.
+final class ThreadCreateEvent extends GatewayEvent {
+  const ThreadCreateEvent(this.thread, {this.newlyCreated = false});
+
+  factory ThreadCreateEvent.fromJson(Map<String, dynamic> json) =>
+      ThreadCreateEvent(
+        ThreadChannel.fromJson(json),
+        newlyCreated: json['newly_created'] as bool? ?? false,
+      );
+
+  final ThreadChannel thread;
+
+  /// True when the thread was just created. False when the event instead
+  /// reports this user joining, or being added to, a thread that already
+  /// existed.
+  final bool newlyCreated;
+
+  @override
+  String toString() =>
+      'ThreadCreateEvent($thread, newlyCreated: $newlyCreated)';
+}
+
+/// A thread changed: renamed, archived, unarchived, locked, retagged, or
+/// given a new slowmode or auto archive duration.
+///
+/// Sending a message to an archived thread unarchives it and produces
+/// one of these; a message to an active thread does not.
+final class ThreadUpdateEvent extends GatewayEvent {
+  const ThreadUpdateEvent(this.thread);
+
+  final ThreadChannel thread;
+
+  @override
+  String toString() => 'ThreadUpdateEvent($thread)';
+}
+
+/// A thread was deleted, along with its messages and memberships.
+final class ThreadDeleteEvent extends GatewayEvent {
+  const ThreadDeleteEvent({
+    required this.threadId,
+    required this.guildId,
+    required this.parentId,
+    required this.threadType,
+  });
+
+  factory ThreadDeleteEvent.fromJson(Map<String, dynamic> json) =>
+      ThreadDeleteEvent(
+        threadId: Snowflake.parse(json['id'] as String),
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        parentId: (json['parent_id'] as String?)?.let(Snowflake.parse),
+        threadType: switch (json['type']) {
+          final int raw => ChannelType.tryFromValue(raw),
+          _ => null,
+        },
+      );
+
+  final Snowflake threadId;
+  final Snowflake guildId;
+  final Snowflake? parentId;
+  final ChannelType? threadType;
+
+  @override
+  String toString() => 'ThreadDeleteEvent($threadId)';
+}
+
+/// The session's set of active threads was replaced, for a whole guild
+/// or for some of its channels.
+///
+/// Sent when the guild reloads its thread state and when the session
+/// gains view access to channels that have active threads. It is never
+/// replayed on RESUME.
+final class ThreadListSyncEvent extends GatewayEvent {
+  const ThreadListSyncEvent({
+    required this.guildId,
+    required this.channelIds,
+    required this.threads,
+    required this.members,
+  });
+
+  factory ThreadListSyncEvent.fromJson(Map<String, dynamic> json) =>
+      ThreadListSyncEvent(
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        channelIds: (json['channel_ids'] as List<dynamic>?)
+            ?.map((c) => Snowflake.parse(c as String))
+            .toList(growable: false),
+        threads: (json['threads'] as List<dynamic>? ?? const [])
+            .map((t) => ThreadChannel.fromJson(t as Map<String, dynamic>))
+            .toList(growable: false),
+        members: (json['members'] as List<dynamic>? ?? const [])
+            .map((m) => ThreadMember.fromJson(m as Map<String, dynamic>))
+            .toList(growable: false),
+      );
+
+  final Snowflake guildId;
+
+  /// The parent channels whose threads [threads] replaces, or `null`
+  /// when it replaces every thread in the guild.
+  final List<Snowflake>? channelIds;
+
+  final List<ThreadChannel> threads;
+
+  /// This session's memberships in [threads].
+  final List<ThreadMember> members;
+
+  @override
+  String toString() =>
+      'ThreadListSyncEvent(guild: $guildId, ${threads.length} threads)';
+}
+
+/// This session's own membership in a thread changed.
+final class ThreadMemberUpdateEvent extends GatewayEvent {
+  const ThreadMemberUpdateEvent({required this.guildId, required this.member});
+
+  factory ThreadMemberUpdateEvent.fromJson(Map<String, dynamic> json) =>
+      ThreadMemberUpdateEvent(
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        member: ThreadMember.fromJson(json),
+      );
+
+  final Snowflake guildId;
+  final ThreadMember member;
+
+  @override
+  String toString() => 'ThreadMemberUpdateEvent($member)';
+}
+
+/// Users joined or left a thread.
+///
+/// Each [addedMembers] entry carries the user's guild member, which the
+/// same object in a REST response only has on request. A removal is
+/// reported by id alone.
+final class ThreadMembersUpdateEvent extends GatewayEvent {
+  const ThreadMembersUpdateEvent({
+    required this.threadId,
+    required this.guildId,
+    required this.memberCount,
+    required this.addedMembers,
+    required this.removedMemberIds,
+  });
+
+  factory ThreadMembersUpdateEvent.fromJson(Map<String, dynamic> json) =>
+      ThreadMembersUpdateEvent(
+        threadId: Snowflake.parse(json['id'] as String),
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        memberCount: json['member_count'] as int? ?? 0,
+        addedMembers: (json['added_members'] as List<dynamic>? ?? const [])
+            .map((m) => ThreadMember.fromJson(m as Map<String, dynamic>))
+            .toList(growable: false),
+        removedMemberIds:
+            (json['removed_member_ids'] as List<dynamic>? ?? const [])
+                .map((id) => Snowflake.parse(id as String))
+                .toList(growable: false),
+      );
+
+  final Snowflake threadId;
+  final Snowflake guildId;
+
+  /// Number of thread members after the change, capped at 50.
+  final int memberCount;
+
+  final List<ThreadMember> addedMembers;
+  final List<Snowflake> removedMemberIds;
+
+  @override
+  String toString() =>
+      'ThreadMembersUpdateEvent($threadId, +${addedMembers.length} '
+      '-${removedMemberIds.length})';
 }
 
 /// Several messages deleted in one operation, from a bulk-delete call.

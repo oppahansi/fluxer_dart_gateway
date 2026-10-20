@@ -760,4 +760,31 @@ void main() {
     expect(added.channelId, const Snowflake(9));
     expect(removed.user.username, 'u');
   });
+
+  test('MESSAGE_REACTION_ADD_MANY', () {
+    // Shaped from the reference: it needs reactions from another account
+    // in a DM with the debounce flag set, not yet observed.
+    final event =
+        GatewayEvent.fromDispatch('MESSAGE_REACTION_ADD_MANY', {
+              'channel_id': '1',
+              'message_id': '2',
+              'reactions': [
+                {
+                  'user_id': '3',
+                  'emoji': {'name': '👍'},
+                },
+                {
+                  'user_id': '4',
+                  'emoji': {'id': '5', 'name': 'party', 'animated': false},
+                },
+              ],
+            })
+            as MessageReactionAddManyEvent;
+
+    expect(event.guildId, isNull);
+    expect(event.reactions.map((r) => r.userId), [
+      const Snowflake(3),
+      const Snowflake(4),
+    ]);
+  });
 }

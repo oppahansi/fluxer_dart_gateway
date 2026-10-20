@@ -229,6 +229,7 @@ class GatewayConnection {
       case MessageDeleteEvent():
       case MessageReactionAddEvent():
       case MessageReactionRemoveEvent():
+      case MessageReactionAddManyEvent():
       case TypingStartEvent():
       case GuildCreateEvent():
       case GuildUpdateEvent():

@@ -1,6 +1,7 @@
 import 'package:fluxer_dart_core/fluxer_dart_core.dart';
 
 import 'member_list.dart';
+import 'session_flags.dart';
 
 /// A decoded DISPATCH (opcode 0) payload.
 ///
@@ -58,6 +59,7 @@ sealed class GatewayEvent {
       'MESSAGE_DELETE' => MessageDeleteEvent.fromJson(data),
       'MESSAGE_REACTION_ADD' => MessageReactionAddEvent.fromJson(data),
       'MESSAGE_REACTION_REMOVE' => MessageReactionRemoveEvent.fromJson(data),
+      'MESSAGE_REACTION_ADD_MANY' => MessageReactionAddManyEvent.fromJson(data),
       'MESSAGE_DELETE_BULK' => MessageDeleteBulkEvent.fromJson(data),
       'MESSAGE_REACTION_REMOVE_ALL' => MessageReactionRemoveAllEvent.fromJson(
         data,
@@ -557,6 +559,47 @@ final class MessageReactionAddEvent extends GatewayEvent {
 
   @override
   String toString() => 'MessageReactionAddEvent($messageId, $emoji)';
+}
+
+/// Several reactions added to one DM message within 650 ms, delivered
+/// together. Sent only to a session that identified with
+/// [SessionFlag.debounceMessageReactions]; a guild-channel reaction always
+/// arrives as its own [MessageReactionAddEvent], and so does a window
+/// that held a single addition.
+final class MessageReactionAddManyEvent extends GatewayEvent {
+  const MessageReactionAddManyEvent({
+    required this.channelId,
+    required this.messageId,
+    required this.guildId,
+    required this.reactions,
+  });
+
+  factory MessageReactionAddManyEvent.fromJson(Map<String, dynamic> json) =>
+      MessageReactionAddManyEvent(
+        channelId: Snowflake.parse(json['channel_id'] as String),
+        messageId: Snowflake.parse(json['message_id'] as String),
+        guildId: (json['guild_id'] as String?)?.let(Snowflake.parse),
+        reactions: [
+          for (final r in json['reactions'] as List<dynamic>? ?? const [])
+            (
+              userId: Snowflake.parse(
+                (r as Map<String, dynamic>)['user_id'] as String,
+              ),
+              emoji: ReactionEmoji.fromJson(r['emoji'] as Map<String, dynamic>),
+            ),
+        ],
+      );
+
+  final Snowflake channelId;
+  final Snowflake messageId;
+  final Snowflake? guildId;
+
+  /// In arrival order, at most 512.
+  final List<({Snowflake userId, ReactionEmoji emoji})> reactions;
+
+  @override
+  String toString() =>
+      'MessageReactionAddManyEvent($messageId, ${reactions.length})';
 }
 
 final class MessageReactionRemoveEvent extends GatewayEvent {

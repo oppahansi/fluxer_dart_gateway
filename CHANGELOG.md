@@ -30,6 +30,9 @@
 - Corrected the `requestGuildMembers` documentation: only a full-list
   request is limited to once per 30 seconds per guild.
 - `ChannelRecipientAddEvent` and `ChannelRecipientRemoveEvent`.
+- `MessageReactionAddManyEvent`, the batched DM reactions a session
+  identified with `SessionFlag.debounceMessageReactions` receives. The
+  flag was already exposed, so such a session got them untyped.
 
 ## 0.4.0
 

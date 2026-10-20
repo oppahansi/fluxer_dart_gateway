@@ -33,6 +33,7 @@
 - `MessageReactionAddManyEvent`, the batched DM reactions a session
   identified with `SessionFlag.debounceMessageReactions` receives. The
   flag was already exposed, so such a session got them untyped.
+- Pins `fluxer_dart_core` 0.5.0.
 
 ## 0.4.0
 

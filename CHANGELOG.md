@@ -29,6 +29,7 @@
   `requestForumUnreads` with `ForumUnreadRequest`.
 - Corrected the `requestGuildMembers` documentation: only a full-list
   request is limited to once per 30 seconds per guild.
+- `ChannelRecipientAddEvent` and `ChannelRecipientRemoveEvent`.
 
 ## 0.4.0
 

@@ -96,6 +96,8 @@ sealed class GatewayEvent {
       'CHANNEL_UPDATE' => ChannelUpdateEvent.fromJson(data),
       'CHANNEL_DELETE' => ChannelDeleteEvent.fromJson(data),
       'CHANNEL_UPDATE_BULK' => ChannelUpdateBulkEvent.fromJson(data),
+      'CHANNEL_RECIPIENT_ADD' => ChannelRecipientAddEvent.fromJson(data),
+      'CHANNEL_RECIPIENT_REMOVE' => ChannelRecipientRemoveEvent.fromJson(data),
       'GUILD_EMOJIS_UPDATE' => GuildEmojisUpdateEvent.fromJson(data),
       'GUILD_STICKERS_UPDATE' => GuildStickersUpdateEvent.fromJson(data),
       'GUILD_AUDIT_LOG_ENTRY_CREATE' => GuildAuditLogEntryCreateEvent.fromJson(
@@ -985,6 +987,43 @@ final class ChannelDeleteEvent extends GatewayEvent {
 }
 
 // --- Thread events --------------------------------------------------------
+
+/// A user joined a group DM this bot is in.
+final class ChannelRecipientAddEvent extends GatewayEvent {
+  const ChannelRecipientAddEvent({required this.channelId, required this.user});
+
+  factory ChannelRecipientAddEvent.fromJson(Map<String, dynamic> json) =>
+      ChannelRecipientAddEvent(
+        channelId: Snowflake.parse(json['channel_id'] as String),
+        user: User.fromJson(json['user'] as Map<String, dynamic>),
+      );
+
+  final Snowflake channelId;
+  final User user;
+
+  @override
+  String toString() => 'ChannelRecipientAddEvent($channelId, ${user.id})';
+}
+
+/// A user left a group DM this bot is in.
+final class ChannelRecipientRemoveEvent extends GatewayEvent {
+  const ChannelRecipientRemoveEvent({
+    required this.channelId,
+    required this.user,
+  });
+
+  factory ChannelRecipientRemoveEvent.fromJson(Map<String, dynamic> json) =>
+      ChannelRecipientRemoveEvent(
+        channelId: Snowflake.parse(json['channel_id'] as String),
+        user: User.fromJson(json['user'] as Map<String, dynamic>),
+      );
+
+  final Snowflake channelId;
+  final User user;
+
+  @override
+  String toString() => 'ChannelRecipientRemoveEvent($channelId, ${user.id})';
+}
 
 /// One operation changed several channels together, most often a
 /// reorder.

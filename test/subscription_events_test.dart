@@ -739,4 +739,25 @@ void main() {
     expect(event.presences.single.guildId, const Snowflake(1));
     expect(event.presences.single.status, PresenceStatus.idle);
   });
+
+  test('CHANNEL_RECIPIENT_ADD and CHANNEL_RECIPIENT_REMOVE', () {
+    // Shaped from the reference: a bot cannot create a group DM without
+    // solving a captcha, so neither has been observed.
+    final user = {'id': '3', 'username': 'u', 'discriminator': '0001'};
+    final added =
+        GatewayEvent.fromDispatch('CHANNEL_RECIPIENT_ADD', {
+              'channel_id': '9',
+              'user': user,
+            })
+            as ChannelRecipientAddEvent;
+    final removed =
+        GatewayEvent.fromDispatch('CHANNEL_RECIPIENT_REMOVE', {
+              'channel_id': '9',
+              'user': user,
+            })
+            as ChannelRecipientRemoveEvent;
+
+    expect(added.channelId, const Snowflake(9));
+    expect(removed.user.username, 'u');
+  });
 }

@@ -258,6 +258,8 @@ class GatewayConnection {
       case ChannelMemberCountsUpdateEvent():
       case ForumUnreadsEvent():
       case VoiceStateUpdateEvent():
+      case ChannelRecipientAddEvent():
+      case ChannelRecipientRemoveEvent():
       case MessageDeleteBulkEvent():
       case MessageReactionRemoveAllEvent():
       case MessageReactionRemoveEmojiEvent():

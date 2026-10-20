@@ -22,6 +22,10 @@ import 'package:fluxer_dart_core/fluxer_dart_core.dart';
 ///   `message_ids` its REST counterpart accepts.
 /// - [ChannelPinsUpdateEvent] and [WebhooksUpdateEvent] carry no
 ///   resource data at all; acting on them requires a REST fetch.
+///
+/// The bulk events are the opposite: [ChannelUpdateBulkEvent] carries
+/// every channel of the guild in full, and [GuildRoleUpdateBulkEvent]
+/// every changed role in full.
 sealed class GatewayEvent {
   const GatewayEvent();
 
@@ -66,6 +70,10 @@ sealed class GatewayEvent {
       'GUILD_ROLE_CREATE' => GuildRoleCreateEvent.fromJson(data),
       'GUILD_ROLE_UPDATE' => GuildRoleUpdateEvent.fromJson(data),
       'GUILD_ROLE_DELETE' => GuildRoleDeleteEvent.fromJson(data),
+      'GUILD_ROLE_UPDATE_BULK' => GuildRoleUpdateBulkEvent.fromJson(data),
+      'GUILD_MEMBERS_CHUNK' => GuildMembersChunkEvent.fromJson(data),
+      'RATE_LIMITED' => RateLimitedEvent.fromJson(data),
+      'USER_UPDATE' => UserUpdateEvent(User.fromJson(data)),
       'GUILD_MEMBER_ADD' => GuildMemberAddEvent.fromJson(data),
       'GUILD_MEMBER_UPDATE' => GuildMemberUpdateEvent.fromJson(data),
       'GUILD_MEMBER_REMOVE' => GuildMemberRemoveEvent.fromJson(data),
@@ -74,6 +82,7 @@ sealed class GatewayEvent {
       'CHANNEL_CREATE' => ChannelCreateEvent(Channel.fromJson(data)),
       'CHANNEL_UPDATE' => ChannelUpdateEvent.fromJson(data),
       'CHANNEL_DELETE' => ChannelDeleteEvent.fromJson(data),
+      'CHANNEL_UPDATE_BULK' => ChannelUpdateBulkEvent.fromJson(data),
       'GUILD_EMOJIS_UPDATE' => GuildEmojisUpdateEvent.fromJson(data),
       'GUILD_STICKERS_UPDATE' => GuildStickersUpdateEvent.fromJson(data),
       'GUILD_AUDIT_LOG_ENTRY_CREATE' => GuildAuditLogEntryCreateEvent.fromJson(
@@ -375,6 +384,125 @@ final class GuildRoleDeleteEvent extends GatewayEvent {
 /// `GuildMemberData & {guild_id}` — i.e. flat `GuildMemberResponse`
 /// fields plus `guild_id`, safe to decode with `GuildMember.fromJson`
 /// directly since `guild_id` is simply an extra key that factory ignores.
+/// One operation changed several roles together: a reorder, or a change
+/// to hoist positions.
+final class GuildRoleUpdateBulkEvent extends GatewayEvent {
+  const GuildRoleUpdateBulkEvent({required this.guildId, required this.roles});
+
+  factory GuildRoleUpdateBulkEvent.fromJson(Map<String, dynamic> json) =>
+      GuildRoleUpdateBulkEvent(
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        roles: (json['roles'] as List<dynamic>)
+            .map((r) => GuildRole.fromJson(r as Map<String, dynamic>))
+            .toList(growable: false),
+      );
+
+  final Snowflake guildId;
+
+  /// Every changed role, in full.
+  final List<GuildRole> roles;
+
+  @override
+  String toString() => 'GuildRoleUpdateBulkEvent($guildId, ${roles.length})';
+}
+
+/// One page of the answer to a Request Guild Members command.
+///
+/// A request always produces at least one chunk: one that matched nobody
+/// has an empty [members], [chunkIndex] 0 and [chunkCount] 1. Never
+/// replayed on RESUME.
+final class GuildMembersChunkEvent extends GatewayEvent {
+  const GuildMembersChunkEvent({
+    required this.guildId,
+    required this.members,
+    required this.chunkIndex,
+    required this.chunkCount,
+    this.presences = const [],
+    this.nonce,
+  });
+
+  factory GuildMembersChunkEvent.fromJson(Map<String, dynamic> json) =>
+      GuildMembersChunkEvent(
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        members: (json['members'] as List<dynamic>)
+            .map((m) => GuildMember.fromJson(m as Map<String, dynamic>))
+            .toList(growable: false),
+        chunkIndex: json['chunk_index'] as int,
+        chunkCount: json['chunk_count'] as int,
+        presences: (json['presences'] as List<dynamic>? ?? const [])
+            .map((p) => UserPresence.fromJson(p as Map<String, dynamic>))
+            .toList(growable: false),
+        nonce: json['nonce'] as String?,
+      );
+
+  final Snowflake guildId;
+
+  /// Up to 1,000 members.
+  final List<GuildMember> members;
+
+  final int chunkIndex;
+  final int chunkCount;
+
+  /// Empty unless the request asked for presences; offline and invisible
+  /// members are omitted even then.
+  final List<UserPresence> presences;
+
+  /// The request's nonce, echoed only when the request named a single
+  /// guild.
+  final String? nonce;
+
+  @override
+  String toString() =>
+      'GuildMembersChunkEvent($guildId, ${chunkIndex + 1}/$chunkCount, ${members.length} members)';
+}
+
+/// The gateway refused a command for exceeding its budget.
+///
+/// Sent only for Request Guild Members (opcode 8), whose full-list form
+/// is limited to one request per guild every 30 seconds.
+final class RateLimitedEvent extends GatewayEvent {
+  const RateLimitedEvent({
+    required this.opcode,
+    required this.retryAfter,
+    required this.guildId,
+    this.nonce,
+  });
+
+  factory RateLimitedEvent.fromJson(Map<String, dynamic> json) {
+    final meta = json['meta'] as Map<String, dynamic>? ?? const {};
+    return RateLimitedEvent(
+      opcode: json['opcode'] as int,
+      retryAfter: Duration(
+        microseconds: ((json['retry_after'] as num) * 1000000).round(),
+      ),
+      guildId: (meta['guild_id'] as String?)?.let(Snowflake.parse),
+      nonce: meta['nonce'] as String?,
+    );
+  }
+
+  final int opcode;
+  final Duration retryAfter;
+
+  /// The guild the refused request named.
+  final Snowflake? guildId;
+
+  /// The refused request's nonce, when it named a single guild.
+  final String? nonce;
+
+  @override
+  String toString() => 'RateLimitedEvent(op $opcode, retry after $retryAfter)';
+}
+
+/// This bot's own user record changed.
+final class UserUpdateEvent extends GatewayEvent {
+  const UserUpdateEvent(this.user);
+
+  final User user;
+
+  @override
+  String toString() => 'UserUpdateEvent(${user.id})';
+}
+
 final class GuildMemberAddEvent extends GatewayEvent {
   const GuildMemberAddEvent({required this.guildId, required this.member});
 
@@ -539,6 +667,31 @@ final class ChannelDeleteEvent extends GatewayEvent {
 }
 
 // --- Thread events --------------------------------------------------------
+
+/// One operation changed several channels together, most often a
+/// reorder.
+///
+/// [channels] holds every channel of the guild the session can view, in
+/// full, not only the ones that moved. A single reorder can send this
+/// more than once; the last one carries the final positions.
+final class ChannelUpdateBulkEvent extends GatewayEvent {
+  const ChannelUpdateBulkEvent({required this.guildId, required this.channels});
+
+  factory ChannelUpdateBulkEvent.fromJson(Map<String, dynamic> json) =>
+      ChannelUpdateBulkEvent(
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        channels: (json['channels'] as List<dynamic>)
+            .map((c) => Channel.fromJson(c as Map<String, dynamic>))
+            .toList(growable: false),
+      );
+
+  final Snowflake guildId;
+  final List<Channel> channels;
+
+  @override
+  String toString() =>
+      'ChannelUpdateBulkEvent($guildId, ${channels.length} channels)';
+}
 
 /// A thread was created, or this session's user was added to one.
 ///

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0
+
+- `ChannelUpdateBulkEvent` and `GuildRoleUpdateBulkEvent`. A channel
+  reorder carries every channel of the guild in full, and can arrive
+  more than once for one reorder; a role reorder or hoist change carries
+  only the roles that changed.
+- `GuildMembersChunkEvent` and `RateLimitedEvent`, the answer to
+  `requestGuildMembers` and its refusal. A full member list may be
+  requested once per guild every 30 seconds.
+- `UserUpdateEvent`, for this bot's own user record.
+- **Breaking for exhaustive switches:** a `switch` over `GatewayEvent`
+  without a default has to handle the five new variants.
+
 ## 0.4.0
 
 - Six thread events: `ThreadCreateEvent`, `ThreadUpdateEvent`,

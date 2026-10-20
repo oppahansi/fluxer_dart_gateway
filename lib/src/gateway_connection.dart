@@ -243,6 +243,11 @@ class GatewayConnection {
       case ChannelCreateEvent():
       case ChannelUpdateEvent():
       case ChannelDeleteEvent():
+      case ChannelUpdateBulkEvent():
+      case GuildRoleUpdateBulkEvent():
+      case GuildMembersChunkEvent():
+      case RateLimitedEvent():
+      case UserUpdateEvent():
       case MessageDeleteBulkEvent():
       case MessageReactionRemoveAllEvent():
       case MessageReactionRemoveEmojiEvent():

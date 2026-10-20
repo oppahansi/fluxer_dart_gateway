@@ -12,6 +12,23 @@
 - `UserUpdateEvent`, for this bot's own user record.
 - **Breaking for exhaustive switches:** a `switch` over `GatewayEvent`
   without a default has to handle the five new variants.
+- `GuildCreateEvent` now carries the guild's `channels`, `emojis`,
+  `stickers`, `members` (this bot's own plus voice participants),
+  `voiceStates` and `joinedAt`. A member whose `user` arrives as a bare
+  id is skipped rather than failing the guild.
+- `GuildSyncEvent`, the same state sent again on request.
+- `PresenceUpdateEvent` and `PresenceUpdateBulkEvent`.
+- `GuildMemberListUpdateEvent` with `MemberListGroup`,
+  `MemberListOperation` and the sealed `MemberListItem`, and
+  `ThreadMemberListUpdateEvent`.
+- `GuildCountsUpdateEvent`, `ChannelMemberCountsUpdateEvent` and
+  `ForumUnreadsEvent`, answering the new count and unread commands.
+- `VoiceStateUpdateEvent`.
+- `GatewayConnection.lazyRequest` with `GuildSubscription`,
+  `requestGuildCounts`, `requestChannelMemberCounts` and
+  `requestForumUnreads` with `ForumUnreadRequest`.
+- Corrected the `requestGuildMembers` documentation: only a full-list
+  request is limited to once per 30 seconds per guild.
 
 ## 0.4.0
 

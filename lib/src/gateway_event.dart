@@ -1,5 +1,7 @@
 import 'package:fluxer_dart_core/fluxer_dart_core.dart';
 
+import 'member_list.dart';
+
 /// A decoded DISPATCH (opcode 0) payload.
 ///
 /// Sealed, so a `switch` over an event value is checked for
@@ -65,6 +67,17 @@ sealed class GatewayEvent {
       'CHANNEL_PINS_UPDATE' => ChannelPinsUpdateEvent.fromJson(data),
       'TYPING_START' => TypingStartEvent.fromJson(data),
       'GUILD_CREATE' => GuildCreateEvent.fromJson(data),
+      'GUILD_SYNC' => GuildSyncEvent.fromJson(data),
+      'PRESENCE_UPDATE' => PresenceUpdateEvent(UserPresence.fromJson(data)),
+      'PRESENCE_UPDATE_BULK' => PresenceUpdateBulkEvent.fromJson(data),
+      'GUILD_MEMBER_LIST_UPDATE' => GuildMemberListUpdateEvent.fromJson(data),
+      'THREAD_MEMBER_LIST_UPDATE' => ThreadMemberListUpdateEvent.fromJson(data),
+      'GUILD_COUNTS_UPDATE' => GuildCountsUpdateEvent.fromJson(data),
+      'CHANNEL_MEMBER_COUNTS_UPDATE' => ChannelMemberCountsUpdateEvent.fromJson(
+        data,
+      ),
+      'FORUM_UNREADS' => ForumUnreadsEvent.fromJson(data),
+      'VOICE_STATE_UPDATE' => VoiceStateUpdateEvent(VoiceState.fromJson(data)),
       'GUILD_UPDATE' => GuildUpdateEvent(Guild.fromJson(data)),
       'GUILD_DELETE' => GuildDeleteEvent.fromJson(data),
       'GUILD_ROLE_CREATE' => GuildRoleCreateEvent.fromJson(data),
@@ -139,16 +152,35 @@ final class MessageCreateEvent extends GatewayEvent {
   String toString() => 'MessageCreateEvent($message)';
 }
 
+/// A guild became available to this session, with its full state.
+///
+/// For a bot this arrives once per guild right after READY, again when a
+/// guild recovers from an outage, and when the bot joins a guild.
 final class GuildCreateEvent extends GatewayEvent {
-  const GuildCreateEvent(this.guild, {this.threads = const []});
+  const GuildCreateEvent(
+    this.guild, {
+    this.threads = const [],
+    this.channels = const [],
+    this.emojis = const [],
+    this.stickers = const [],
+    this.members = const [],
+    this.voiceStates = const [],
+    this.joinedAt,
+  });
 
-  factory GuildCreateEvent.fromJson(Map<String, dynamic> json) =>
-      GuildCreateEvent(
-        Guild.fromGuildCreateJson(json),
-        threads: (json['threads'] as List<dynamic>? ?? const [])
-            .map((t) => ThreadChannel.fromJson(t as Map<String, dynamic>))
-            .toList(growable: false),
-      );
+  factory GuildCreateEvent.fromJson(Map<String, dynamic> json) {
+    final state = _GuildState.fromJson(json);
+    return GuildCreateEvent(
+      state.guild,
+      threads: state.threads,
+      channels: state.channels,
+      emojis: state.emojis,
+      stickers: state.stickers,
+      members: state.members,
+      voiceStates: state.voiceStates,
+      joinedAt: state.joinedAt,
+    );
+  }
 
   final Guild guild;
 
@@ -157,8 +189,294 @@ final class GuildCreateEvent extends GatewayEvent {
   /// thread and user ids that object has elsewhere.
   final List<ThreadChannel> threads;
 
+  /// Every channel this session can view, threads excluded.
+  final List<Channel> channels;
+
+  final List<GuildEmoji> emojis;
+  final List<GuildSticker> stickers;
+
+  /// This bot's own member plus the member of everyone in [voiceStates]
+  /// — not the roster; use `Bot.queryMembers` for that.
+  final List<GuildMember> members;
+
+  /// Voice connections in channels this session can view.
+  final List<VoiceState> voiceStates;
+
+  /// When this bot joined the guild.
+  final DateTime? joinedAt;
+
   @override
   String toString() => 'GuildCreateEvent($guild)';
+}
+
+/// A guild's full state sent again because a Lazy Request asked for a
+/// sync. Carries the same state as [GuildCreateEvent], and is handled the
+/// same way. Never replayed on RESUME.
+final class GuildSyncEvent extends GatewayEvent {
+  const GuildSyncEvent(
+    this.guild, {
+    this.threads = const [],
+    this.channels = const [],
+    this.emojis = const [],
+    this.stickers = const [],
+    this.members = const [],
+    this.voiceStates = const [],
+    this.joinedAt,
+  });
+
+  factory GuildSyncEvent.fromJson(Map<String, dynamic> json) {
+    final state = _GuildState.fromJson(json);
+    return GuildSyncEvent(
+      state.guild,
+      threads: state.threads,
+      channels: state.channels,
+      emojis: state.emojis,
+      stickers: state.stickers,
+      members: state.members,
+      voiceStates: state.voiceStates,
+      joinedAt: state.joinedAt,
+    );
+  }
+
+  final Guild guild;
+  final List<ThreadChannel> threads;
+  final List<Channel> channels;
+  final List<GuildEmoji> emojis;
+  final List<GuildSticker> stickers;
+  final List<GuildMember> members;
+  final List<VoiceState> voiceStates;
+  final DateTime? joinedAt;
+
+  @override
+  String toString() => 'GuildSyncEvent($guild)';
+}
+
+/// The guild ready object shared by `GUILD_CREATE` and `GUILD_SYNC`.
+final class _GuildState {
+  _GuildState.fromJson(Map<String, dynamic> json)
+    : guild = Guild.fromGuildCreateJson(json),
+      threads = _list(json['threads'], ThreadChannel.fromJson),
+      channels = _list(json['channels'], Channel.fromJson),
+      emojis = _list(json['emojis'], GuildEmoji.fromJson),
+      stickers = _list(json['stickers'], GuildSticker.fromJson),
+      members = [
+        for (final m in json['members'] as List<dynamic>? ?? const [])
+          // The reference describes members in the post-READY burst as
+          // carrying a `user` of `{id}` alone. Such an entry cannot become
+          // a GuildMember, and must not fail the whole guild.
+          if (((m as Map<String, dynamic>)['user'] as Map?)?['username'] !=
+              null)
+            GuildMember.fromJson(m),
+      ],
+      voiceStates = _list(json['voice_states'], VoiceState.fromJson),
+      joinedAt = (json['joined_at'] as String?)?.let(DateTime.parse);
+
+  final Guild guild;
+  final List<ThreadChannel> threads;
+  final List<Channel> channels;
+  final List<GuildEmoji> emojis;
+  final List<GuildSticker> stickers;
+  final List<GuildMember> members;
+  final List<VoiceState> voiceStates;
+  final DateTime? joinedAt;
+
+  static List<T> _list<T>(
+    Object? value,
+    T Function(Map<String, dynamic>) decode,
+  ) => (value as List<dynamic>? ?? const [])
+      .map((e) => decode(e as Map<String, dynamic>))
+      .toList(growable: false);
+}
+
+/// Another user's presence changed. A bot receives these only for the
+/// members it subscribed to with `GuildSubscription.members`.
+final class PresenceUpdateEvent extends GatewayEvent {
+  const PresenceUpdateEvent(this.presence);
+
+  final UserPresence presence;
+
+  @override
+  String toString() => 'PresenceUpdateEvent($presence)';
+}
+
+/// The online presences of a guild that just recovered from being
+/// unavailable, at most 500 per dispatch. Every entry belongs to
+/// [guildId], whether or not it names a guild itself.
+final class PresenceUpdateBulkEvent extends GatewayEvent {
+  const PresenceUpdateBulkEvent({
+    required this.guildId,
+    required this.presences,
+  });
+
+  factory PresenceUpdateBulkEvent.fromJson(Map<String, dynamic> json) =>
+      PresenceUpdateBulkEvent(
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        presences: (json['presences'] as List<dynamic>? ?? const [])
+            .map(
+              (p) => UserPresence.fromJson({
+                ...p as Map<String, dynamic>,
+                'guild_id': json['guild_id'],
+              }),
+            )
+            .toList(growable: false),
+      );
+
+  final Snowflake guildId;
+  final List<UserPresence> presences;
+
+  @override
+  String toString() => 'PresenceUpdateBulkEvent($guildId, ${presences.length})';
+}
+
+/// A subscribed member list resynced the subscriber's ranges.
+///
+/// [listId] is the channel id as a string. The `offline` group is
+/// omitted once it holds more than 1,000 members, along with its items,
+/// so [memberCount] can exceed what the list ever shows.
+final class GuildMemberListUpdateEvent extends GatewayEvent {
+  const GuildMemberListUpdateEvent({
+    required this.guildId,
+    required this.listId,
+    required this.channelId,
+    required this.memberCount,
+    required this.onlineCount,
+    required this.groups,
+    required this.ops,
+  });
+
+  factory GuildMemberListUpdateEvent.fromJson(Map<String, dynamic> json) =>
+      GuildMemberListUpdateEvent(
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        listId: json['id'] as String,
+        channelId: (json['channel_id'] as String?)?.let(Snowflake.parse),
+        memberCount: json['member_count'] as int,
+        onlineCount: json['online_count'] as int,
+        groups: (json['groups'] as List<dynamic>? ?? const [])
+            .map((g) => MemberListGroup.fromJson(g as Map<String, dynamic>))
+            .toList(growable: false),
+        ops: (json['ops'] as List<dynamic>? ?? const [])
+            .map((o) => MemberListOperation.fromJson(o as Map<String, dynamic>))
+            .toList(growable: false),
+      );
+
+  final Snowflake guildId;
+  final String listId;
+  final Snowflake? channelId;
+  final int memberCount;
+  final int onlineCount;
+  final List<MemberListGroup> groups;
+  final List<MemberListOperation> ops;
+
+  @override
+  String toString() =>
+      'GuildMemberListUpdateEvent($guildId, $listId, $onlineCount/$memberCount)';
+}
+
+/// A subscribed thread member list resynced. Never replayed on RESUME.
+final class ThreadMemberListUpdateEvent extends GatewayEvent {
+  const ThreadMemberListUpdateEvent({
+    required this.guildId,
+    required this.threadId,
+    required this.members,
+  });
+
+  factory ThreadMemberListUpdateEvent.fromJson(Map<String, dynamic> json) =>
+      ThreadMemberListUpdateEvent(
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        threadId: Snowflake.parse(json['thread_id'] as String),
+        members: (json['members'] as List<dynamic>? ?? const [])
+            .map(
+              (m) => ThreadMemberListEntry.fromJson(m as Map<String, dynamic>),
+            )
+            .toList(growable: false),
+      );
+
+  final Snowflake guildId;
+  final Snowflake threadId;
+
+  /// At most 1,000.
+  final List<ThreadMemberListEntry> members;
+
+  @override
+  String toString() =>
+      'ThreadMemberListUpdateEvent($threadId, ${members.length})';
+}
+
+/// The answer to Request Guild Counts. A guild that did not answer
+/// within 2 seconds has no entry.
+final class GuildCountsUpdateEvent extends GatewayEvent {
+  const GuildCountsUpdateEvent({required this.counts, this.nonce});
+
+  factory GuildCountsUpdateEvent.fromJson(Map<String, dynamic> json) =>
+      GuildCountsUpdateEvent(
+        counts: (json['counts'] as List<dynamic>? ?? const [])
+            .map((c) => GuildCounts.fromJson(c as Map<String, dynamic>))
+            .toList(growable: false),
+        nonce: json['nonce'] as String?,
+      );
+
+  final List<GuildCounts> counts;
+  final String? nonce;
+
+  @override
+  String toString() => 'GuildCountsUpdateEvent(${counts.length})';
+}
+
+/// The answer to Request Channel Member Counts. A channel this bot cannot
+/// view, or lacks `viewChannelMembers` in, has no entry.
+final class ChannelMemberCountsUpdateEvent extends GatewayEvent {
+  const ChannelMemberCountsUpdateEvent({required this.counts, this.nonce});
+
+  factory ChannelMemberCountsUpdateEvent.fromJson(Map<String, dynamic> json) =>
+      ChannelMemberCountsUpdateEvent(
+        counts: (json['counts'] as List<dynamic>? ?? const [])
+            .map((c) => ChannelMemberCounts.fromJson(c as Map<String, dynamic>))
+            .toList(growable: false),
+        nonce: json['nonce'] as String?,
+      );
+
+  final List<ChannelMemberCounts> counts;
+  final String? nonce;
+
+  @override
+  String toString() => 'ChannelMemberCountsUpdateEvent(${counts.length})';
+}
+
+/// The answer to Request Forum Unreads: one entry per requested post
+/// found in [channelId], duplicates collapsed.
+final class ForumUnreadsEvent extends GatewayEvent {
+  const ForumUnreadsEvent({
+    required this.guildId,
+    required this.channelId,
+    required this.threads,
+  });
+
+  factory ForumUnreadsEvent.fromJson(Map<String, dynamic> json) =>
+      ForumUnreadsEvent(
+        guildId: Snowflake.parse(json['guild_id'] as String),
+        channelId: Snowflake.parse(json['channel_id'] as String),
+        threads: (json['threads'] as List<dynamic>? ?? const [])
+            .map((t) => ForumUnread.fromJson(t as Map<String, dynamic>))
+            .toList(growable: false),
+      );
+
+  final Snowflake guildId;
+  final Snowflake channelId;
+  final List<ForumUnread> threads;
+
+  @override
+  String toString() => 'ForumUnreadsEvent($channelId, ${threads.length})';
+}
+
+/// A voice connection joined, changed or left
+/// ([VoiceState.channelId] `null`).
+final class VoiceStateUpdateEvent extends GatewayEvent {
+  const VoiceStateUpdateEvent(this.state);
+
+  final VoiceState state;
+
+  @override
+  String toString() => 'VoiceStateUpdateEvent($state)';
 }
 
 // --- Message events ---------------------------------------------------

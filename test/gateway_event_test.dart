@@ -81,13 +81,13 @@ void main() {
     });
 
     test('falls back to UnknownDispatchEvent for unmodeled event names', () {
-      final event = GatewayEvent.fromDispatch('PRESENCE_UPDATE', {
+      final event = GatewayEvent.fromDispatch('RELATIONSHIP_ADD', {
         'user_id': '1',
       });
 
       expect(event, isA<UnknownDispatchEvent>());
       final unknown = event as UnknownDispatchEvent;
-      expect(unknown.eventName, 'PRESENCE_UPDATE');
+      expect(unknown.eventName, 'RELATIONSHIP_ADD');
       expect(unknown.data, {'user_id': '1'});
     });
   });

@@ -184,5 +184,91 @@ void main() {
         expect(d.containsKey('presences'), isFalse);
       });
     });
+
+    test('lazyRequest sends opcode 14 with only the options set', () {
+      fakeAsync((async) {
+        connection = makeConnection();
+        identifyPayload(async);
+
+        connection.lazyRequest({
+          Snowflake.parse('99'): GuildSubscription(
+            sync: true,
+            typing: false,
+            memberListChannels: {
+              Snowflake.parse('7'): [(0, 99)],
+            },
+            members: [Snowflake.parse('5')],
+            threadMemberLists: [Snowflake.parse('8')],
+          ),
+        });
+        _pump(async);
+
+        final sent = transports.single.sentMessages.last;
+        expect(sent['op'], 14);
+        expect(sent['d'], {
+          'subscriptions': {
+            '99': {
+              'sync': true,
+              'typing': false,
+              'member_list_channels': {
+                '7': [
+                  [0, 99],
+                ],
+              },
+              'members': ['5'],
+              'thread_member_lists': ['8'],
+            },
+          },
+        });
+      });
+    });
+
+    test('count and forum unread requests send opcodes 15, 16 and 28', () {
+      fakeAsync((async) {
+        connection = makeConnection();
+        identifyPayload(async);
+
+        connection.requestGuildCounts([Snowflake.parse('99')], nonce: 'g');
+        connection.requestChannelMemberCounts(Snowflake.parse('99'), [
+          Snowflake.parse('7'),
+        ]);
+        connection
+            .requestForumUnreads(Snowflake.parse('99'), Snowflake.parse('6'), [
+              ForumUnreadRequest(
+                Snowflake.parse('8'),
+                ackMessageId: Snowflake.parse('9'),
+              ),
+              ForumUnreadRequest(Snowflake.parse('10')),
+            ]);
+        _pump(async);
+
+        final sent = transports.single.sentMessages;
+        expect(sent[sent.length - 3], {
+          'op': 15,
+          'd': {
+            'guild_ids': ['99'],
+            'nonce': 'g',
+          },
+        });
+        expect(sent[sent.length - 2], {
+          'op': 16,
+          'd': {
+            'guild_id': '99',
+            'channel_ids': ['7'],
+          },
+        });
+        expect(sent.last, {
+          'op': 28,
+          'd': {
+            'guild_id': '99',
+            'channel_id': '6',
+            'threads': [
+              {'thread_id': '8', 'ack_message_id': '9'},
+              {'thread_id': '10'},
+            ],
+          },
+        });
+      });
+    });
   });
 }

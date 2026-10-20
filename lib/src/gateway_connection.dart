@@ -7,6 +7,7 @@ import 'package:fluxer_dart_utils/fluxer_dart_utils.dart';
 import 'connection_state.dart';
 import 'gateway_event.dart';
 import 'gateway_transport.dart';
+import 'guild_subscription.dart';
 import 'heartbeat_manager.dart';
 import 'opcodes.dart';
 import 'session_flags.dart';
@@ -248,6 +249,15 @@ class GatewayConnection {
       case GuildMembersChunkEvent():
       case RateLimitedEvent():
       case UserUpdateEvent():
+      case GuildSyncEvent():
+      case PresenceUpdateEvent():
+      case PresenceUpdateBulkEvent():
+      case GuildMemberListUpdateEvent():
+      case ThreadMemberListUpdateEvent():
+      case GuildCountsUpdateEvent():
+      case ChannelMemberCountsUpdateEvent():
+      case ForumUnreadsEvent():
+      case VoiceStateUpdateEvent():
       case MessageDeleteBulkEvent():
       case MessageReactionRemoveAllEvent():
       case MessageReactionRemoveEmojiEvent():
@@ -316,8 +326,10 @@ class GatewayConnection {
   /// Asks for guild members, answered asynchronously as one or more
   /// `GUILD_MEMBERS_CHUNK` dispatches rather than a return value.
   ///
-  /// A bot may have one request in flight per guild, and the guild is
-  /// rate limited for 30 seconds afterwards. [limit] caps results at 100;
+  /// A full member list (no [query], no [userIds]) may be requested once
+  /// per guild every 30 seconds; a request inside that window is answered
+  /// by `RATE_LIMITED` instead. Filtered requests are not limited that
+  /// way. [limit] caps results at 100;
   /// leaving it at 0 with a [query] set returns 25, and leaving both
   /// unset requests the full member list, which additionally requires one
   /// of `manageRoles`, `kickMembers` or `banMembers`. [nonce] is echoed
@@ -341,6 +353,71 @@ class GatewayConnection {
           'user_ids': userIds.map((id) => id.toJson()).toList(growable: false),
         if (presences) 'presences': true,
         'nonce': ?nonce,
+      },
+    });
+  }
+
+  /// Sets this session's per-guild subscriptions (Lazy Request, opcode
+  /// 14). Answered, depending on the options, by `GUILD_SYNC`,
+  /// `GUILD_MEMBER_LIST_UPDATE`, `THREAD_MEMBER_LIST_UPDATE` and
+  /// `PRESENCE_UPDATE`; never by an error. A guild this session is not
+  /// connected to is skipped.
+  void lazyRequest(Map<Snowflake, GuildSubscription> subscriptions) {
+    _send({
+      'op': GatewayOpcode.lazyRequest.value,
+      'd': {
+        'subscriptions': {
+          for (final MapEntry(:key, :value) in subscriptions.entries)
+            key.toJson(): value.toJson(),
+        },
+      },
+    });
+  }
+
+  /// Asks for member and online counts, answered by one
+  /// `GUILD_COUNTS_UPDATE`. At most 100 guilds; [nonce] (1-64 bytes) is
+  /// echoed back.
+  void requestGuildCounts(List<Snowflake> guildIds, {String? nonce}) {
+    _send({
+      'op': GatewayOpcode.requestGuildCounts.value,
+      'd': {
+        'guild_ids': [for (final id in guildIds) id.toJson()],
+        'nonce': ?nonce,
+      },
+    });
+  }
+
+  /// Asks for member and online counts of up to 25 channels in one
+  /// guild, answered by one `CHANNEL_MEMBER_COUNTS_UPDATE`. [nonce]
+  /// (1-64 bytes) is echoed back.
+  void requestChannelMemberCounts(
+    Snowflake guildId,
+    List<Snowflake> channelIds, {
+    String? nonce,
+  }) {
+    _send({
+      'op': GatewayOpcode.requestChannelMemberCounts.value,
+      'd': {
+        'guild_id': guildId.toJson(),
+        'channel_ids': [for (final id in channelIds) id.toJson()],
+        'nonce': ?nonce,
+      },
+    });
+  }
+
+  /// Asks for unread counts of up to 40 posts in a forum or media
+  /// channel, answered by `FORUM_UNREADS`. The command takes no nonce.
+  void requestForumUnreads(
+    Snowflake guildId,
+    Snowflake channelId,
+    List<ForumUnreadRequest> threads,
+  ) {
+    _send({
+      'op': GatewayOpcode.requestForumUnreads.value,
+      'd': {
+        'guild_id': guildId.toJson(),
+        'channel_id': channelId.toJson(),
+        'threads': [for (final t in threads) t.toJson()],
       },
     });
   }

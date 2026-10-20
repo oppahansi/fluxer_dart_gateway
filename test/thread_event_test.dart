@@ -184,6 +184,64 @@ void main() {
   });
 
   group('THREAD_LIST_SYNC', () {
+    test('a full sync carries no channel_ids', () {
+      final event =
+          GatewayEvent.fromDispatch('THREAD_LIST_SYNC', {
+                'guild_id': '1536791058510249984',
+                'members': [
+                  {
+                    'flags': 0,
+                    'id': '1562157554690162688',
+                    'join_timestamp': '2026-10-20T17:36:24.580Z',
+                    'mute_config': null,
+                    'muted': false,
+                    'user_id': '1536790964075495424',
+                  },
+                ],
+                'threads': [
+                  {
+                    'flags': 0,
+                    'guild_id': '1536791058510249984',
+                    'id': '1562157554690162688',
+                    'last_message_id': null,
+                    'last_pin_timestamp': null,
+                    'member_count': 1,
+                    'message_count': 0,
+                    'name': 'rec-thread',
+                    'owner_id': '1536790964075495424',
+                    'parent_id': '1562157554274926592',
+                    'rate_limit_per_user': 0,
+                    'thread_metadata': {
+                      'archive_timestamp': '2026-10-20T17:36:24.580Z',
+                      'archived': false,
+                      'auto_archive_duration': 4320,
+                      'create_timestamp': '2026-10-20T17:36:24.580Z',
+                      'locked': false,
+                    },
+                    'total_message_sent': 0,
+                    'type': 11,
+                  },
+                ],
+              })
+              as ThreadListSyncEvent;
+
+      expect(event.guildId, Snowflake.parse('1536791058510249984'));
+      expect(event.channelIds, isNull);
+      expect(event.threads.single.name, 'rec-thread');
+      expect(
+        event.threads.single.parentId,
+        Snowflake.parse('1562157554274926592'),
+      );
+      expect(
+        event.members.single.threadId,
+        Snowflake.parse('1562157554690162688'),
+      );
+      expect(
+        event.members.single.userId,
+        Snowflake.parse('1536790964075495424'),
+      );
+    });
+
     // Not observed on a live session; shaped from the reference.
     test('channel_ids scopes the replacement to those channels', () {
       final event =

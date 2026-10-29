@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.0
+
+- Pins `fluxer_dart_core` 0.6.0.
+
 ## 0.5.0
 
 - `ChannelUpdateBulkEvent` and `GuildRoleUpdateBulkEvent`. A channel

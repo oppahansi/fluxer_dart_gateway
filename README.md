@@ -1,5 +1,7 @@
 # fluxer_dart_gateway
 
+[![Discord](https://img.shields.io/static/v1?logo=discord&label=discord&message=Join&color=blue)](https://discord.gg/ncKmDEArqg)
+
 WebSocket gateway client for the [fluxer_dart](https://github.com/oppahansi/fluxer_dart) ecosystem.
 
 Opcodes, close codes, and the client commands follow
